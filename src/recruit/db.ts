@@ -11,6 +11,7 @@
 import { randomUUID } from "crypto";
 import { PrismaClient, PricingUnit } from "@prisma/client";
 import { slugify } from "./slug";
+import { generateProfileCopy } from "./ai";
 
 export const prisma = new PrismaClient();
 
@@ -126,12 +127,22 @@ export async function createDraftProvider(p: Sendable): Promise<
   const claimToken = randomUUID();
   const location = p.address || `${p.city}${p.state ? ", " + p.state : ""}`;
 
+  // AI headline/bio/tags so the pre-built profile doesn't look bare when the
+  // owner clicks the claim link. Fail-open — null just means an empty draft.
+  const copy = await generateProfileCopy({
+    name: p.name,
+    categoryName: p.categoryName,
+    city: p.city,
+  });
+
   const provider = await prisma.provider.create({
     data: {
       slug,
       name: p.name,
       categoryId,
-      tags: [],
+      headline: copy?.headline || null,
+      bio: copy?.bio || null,
+      tags: copy?.tags ?? [],
       city: p.city,
       location,
       phone: p.phone,
