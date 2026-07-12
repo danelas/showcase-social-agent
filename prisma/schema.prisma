@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Supabase + Vercel: pooled URL for the serverless app, direct URL for
+  // migrations / prisma db push. Both are injected by the Vercel-Supabase
+  // integration. Falls back to DATABASE_URL for plain local dev.
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+enum PricingUnit {
+  HOUR
+  SESSION
+  VISIT
+  FLAT
+  CUSTOM
+}
+
+enum Plan {
+  FREE      // default listing
+  BOOSTED   // paid placement in the feed
+}
+
+enum ContactType {
+  BOOK
+  MESSAGE
+  CALL
+  INSTAGRAM
+}
+
+// A Provider IS a feed card. Unlike a classic marketplace we don't split
+// vendor/listing — one provider, one intro video, one card. Providers can be
+// seeded UNCLAIMED (claimed=false) by an operator from a real provider's
+// existing reel, then claimed later via claimToken. This is how the feed gets
+// its first supply without a signup wall.
+model Provider {
+  id            String      @id @default(uuid()) @db.Uuid
+
+  // Identity
+  slug          String      @unique
+  name          String
+  headline      String?     // one-liner shown under the name ("Deep tissue + prenatal")
+  bio           String?     @db.Text
+
+  // Taxonomy
+  categoryId    String      @db.Uuid
+  category      Category    @relation(fields: [categoryId], references: [id])
+  tags          String[]    // free-text intents: "botox", "hydrafacial", "acne scars"
+
+  // The card media. videoUrl is the "trailer" — the clip shown on the feed card
+  // and featured at the top of the channel page. The full set of clips lives in
+  // the ProviderVideo relation (the channel's Videos grid).
+  videoUrl      String?
+  videoPoster   String?
+  videoDuration Int?        // seconds
+  profileImage  String?     // avatar
+  bannerImage   String?     // channel cover art (like a YouTube banner)
+  gallery       String[]    // photos tab
+  videos        ProviderVideo[]
+
+  // Location
+  city          String?
+  location      String      // human-readable service area
+  locationLat   Float?
+  locationLng   Float?
+  serviceRadius Int         @default(15)
+  offersMobile  Boolean     @default(true)
+  offersInStudio Boolean    @default(false)
+
+  // Pricing
+  priceMin      Decimal?    @db.Decimal(10, 2)
+  priceMax      Decimal?    @db.Decimal(10, 2)
+  pricingUnit   PricingUnit @default(SESSION)
+
+  // Contact / booking — direct, no lead middleman
+  phone         String?
+  bookingUrl    String?     // Calendly, Square, Vagaro, etc.
+  instagramUrl  String?
+  websiteUrl    String?
+
+  // Social proof / ranking
+  rating        Float       @default(0)
+  reviewCount   Int         @default(0)
+  responseRate  Float       @default(0)
+  rankScore     Float       @default(0)
+
+  // Ad reporting: feed impressions + cumulative ad spend (cents)
+  viewsCount    Int         @default(0)
+  adSpendCents  Int         @default(0)
+
+  // Lifecycle
+  plan          Plan        @default(FREE)
+  boostedUntil  DateTime?   // paid featured placement expires at this time
+  isFeatured    Boolean     @default(false)
+  isApproved    Boolean     @default(true)   // seeded providers show immediately
+  isActive      Boolean     @default(true)
+  claimed       Boolean     @default(false)  // false = operator-seeded, unclaimed
+  claimToken    String?     @unique          // emailed/texted to the provider to claim
+  seededFrom    String?     // note where the video came from ("instagram reel")
+
+  reviews       Review[]
+  contacts      ContactEvent[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([categoryId])
+  @@index([city])
+  @@index([videoUrl])
+  @@index([rankScore])
+  @@map("providers")
+}
+
+// One row per client tap on Book / Message / Call / Instagram. This is the
+// lead-count rails (pay-per-lead later) and the provider's proof-of-value stat.
+model ContactEvent {
+  id         String      @id @default(uuid()) @db.Uuid
+  providerId String      @db.Uuid
+  provider   Provider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  type       ContactType
+  source     String?     // "feed" | "channel"
+  createdAt  DateTime    @default(now())
+
+  @@index([providerId, createdAt])
+  @@map("contact_events")
+}
+
+// A clip in a provider's channel. The provider's `videoUrl` (trailer) is usually
+// also the first ProviderVideo, but the grid is driven by these rows.
+model ProviderVideo {
+  id         String   @id @default(uuid()) @db.Uuid
+  providerId String   @db.Uuid
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  url        String
+  poster     String?
+  caption    String?
+  duration   Int?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([providerId])
+  @@map("provider_videos")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String     @unique
+  slug        String     @unique
+  emoji       String?
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  providers   Provider[]
+
+  @@map("categories")
+}
+
+model Review {
+  id          String   @id @default(uuid()) @db.Uuid
+  providerId  String   @db.Uuid
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  authorName  String
+  rating      Int
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([providerId])
+  @@map("reviews")
+}
+
+// Cold-recruitment state for the scripts/recruit engine. One row per business
+// found on Google Places. Mirrors Gold Touch List's outreach_prospects, but the
+// PeekScout twist is that when we send, we actually CREATE an unclaimed Provider
+// (draft profile, no media so it's invisible in the feed) and email the
+// provider a claim link — the "we already made your profile" pitch. providerId
+// + claimToken point at that seeded row once sent.
+model OutreachProspect {
+  id           String   @id @default(uuid()) @db.Uuid
+
+  placeKey     String   @unique   // Google place_id — stable dedup key
+  name         String
+  categoryName String              // matches a Category.name so send can resolve it
+  city         String
+  state        String?
+  address      String?
+  phone        String?
+  website      String?
+
+  emails       String[]
+  primaryEmail String?
+
+  // NEW | SENT | FAILED | REPLIED | UNSUB | CONVERTED | INVALID
+  status       String   @default("NEW")
+
+  // Set when we send: the draft Provider we created + its claim link token.
+  providerId   String?  @db.Uuid
+  claimToken   String?
+  resendId     String?
+  sendError    String?
+  query        String?
+
+  scrapedAt    DateTime @default(now())
+  sentAt       DateTime?
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([categoryName])
+  @@index([city])
+  @@map("outreach_prospects")
+}
+
+// Homepage hero A/B: which hero a visitor saw ("wall" | "phone") and whether
+// they converted ("view" on load, "convert" on search submit). Aggregate with
+// GET /api/hero?token=ADMIN_TOKEN.
+model HeroEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  variant   String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([variant, action])
+  @@map("hero_events")
+}
+
+// Web Push subscriptions. role="provider" rows fire on new leads (providerId);
+// role="user" rows fire when a new pro appears in their category/city.
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  role       String   // "provider" | "user"
+  providerId String?  @db.Uuid
+  category   String?  // category slug (user alerts)
+  city       String?
+  createdAt  DateTime @default(now())
+
+  @@index([role, providerId])
+  @@index([role, category])
+  @@map("push_subscriptions")
+}

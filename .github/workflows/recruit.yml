@@ -1,0 +1,88 @@
+name: Recruit Providers
+
+# Daily provider recruitment for PeekScout. Discovers businesses on Google Places
+# (one city per day, auto-rotated), then for each new prospect creates an
+# unclaimed draft Provider in the shared PeekScout Postgres and cold-emails a
+# claim link ("we already built your profile"). State lives in outreach_prospects.
+on:
+  # PAUSED until getpeekscout.com is verified in Resend — a live scheduled run
+  # against an unverified sender would mark every prospect FAILED. Uncomment to
+  # resume the daily cron:
+  # schedule:
+  #   # 15:00 UTC = 11 AM EDT / 10 AM EST.
+  #   - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live (create profiles + send) or dry-run"
+        required: false
+        default: "live"
+        type: choice
+        options: ["live", "dry-run"]
+      max_sends:
+        description: "Cap on emails sent this run"
+        required: false
+        default: "20"
+        type: string
+
+jobs:
+  recruit:
+    runs-on: ubuntu-latest
+    # Discover scrapes each new prospect's website for an email — a full city
+    # sweep across all categories runs well past 20 minutes.
+    timeout-minutes: 45
+    env:
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+      POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+      RECRUIT_BRAND: ${{ secrets.RECRUIT_BRAND }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # postinstall runs `prisma generate`. npm install (not ci): the lockfile
+      # is generated on Windows and npm's cross-platform optional-dep entries
+      # drift from what Linux npm ci demands.
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Check required secrets
+        run: |
+          missing=0
+          if [ -z "$GOOGLE_PLACES_API_KEY" ] && [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+            echo "::error::Need GOOGLE_PLACES_API_KEY or GOOGLE_MAPS_API_KEY"; missing=1
+          fi
+          for v in POSTGRES_PRISMA_URL POSTGRES_URL_NON_POOLING RESEND_API_KEY RESEND_FROM_EMAIL NEXT_PUBLIC_APP_URL; do
+            [ -z "${!v}" ] && { echo "::error::Required secret $v missing"; missing=1; } || echo "OK: $v present"
+          done
+          [ "$missing" = "0" ] || exit 1
+
+      # Idempotent — creates outreach_prospects only if it doesn't already exist.
+      # Does not touch any other table (no `prisma db push`).
+      - name: Ensure outreach_prospects table exists
+        run: npm run db:init
+
+      - name: Discover new prospects (today's rotating city)
+        run: npm run recruit:discover
+
+      - name: Send outreach
+        env:
+          RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
+          # 8/day while getpeekscout.com warms up — raise to 20 after ~2 weeks
+          # of clean sending (no spam complaints, no bounces spike).
+          MAX_SENDS: ${{ github.event.inputs.max_sends || '8' }}
+        run: |
+          if [ "$RUN_MODE" = "live" ]; then
+            npm run recruit:send -- --live --max "$MAX_SENDS"
+          else
+            npm run recruit:send -- --max "$MAX_SENDS"
+          fi

@@ -1,0 +1,26 @@
+{
+  "name": "showcase-social-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cold-outreach recruitment agent for PeekScout — finds local providers on Google Places, creates an unclaimed draft profile for each, and emails a claim link (\"we already built your profile\").",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "db:init": "prisma db execute --file prisma/create-outreach-table.sql --schema prisma/schema.prisma",
+    "recruit:discover": "tsx src/recruit/discover.ts",
+    "recruit:send": "tsx src/recruit/outreach.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "prisma": "^6.19.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
