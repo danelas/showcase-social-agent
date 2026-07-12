@@ -1,0 +1,36 @@
+name: Test Email
+
+# Manual smoke test for the Resend setup: sends ONE email to the address you
+# type in, using the same RESEND_API_KEY / RESEND_FROM_EMAIL secrets the
+# recruiter uses. If this succeeds, live outreach sends will too.
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Recipient address"
+        required: true
+        default: "danamazon6@gmail.com"
+        type: string
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          TO: ${{ github.event.inputs.to }}
+        run: |
+          [ -n "$RESEND_API_KEY" ] || { echo "::error::RESEND_API_KEY missing"; exit 1; }
+          [ -n "$RESEND_FROM_EMAIL" ] || { echo "::error::RESEND_FROM_EMAIL missing"; exit 1; }
+          body=$(jq -n --arg from "$RESEND_FROM_EMAIL" --arg to "$TO" \
+            '{from: $from, to: $to, subject: "PeekScout recruiter — Resend test", text: "If you are reading this, RESEND_API_KEY and RESEND_FROM_EMAIL are working. The recruiter can send."}')
+          code=$(curl -s -o resp.json -w "%{http_code}" https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$body")
+          echo "HTTP $code"
+          cat resp.json
+          [ "$code" = "200" ] || { echo "::error::Resend rejected the send (HTTP $code) — see response above"; exit 1; }
