@@ -67,9 +67,12 @@ jobs:
           [ "$missing" = "0" ] || exit 1
 
       # Idempotent — creates outreach_prospects only if it doesn't already exist.
-      # Does not touch any other table (no `prisma db push`).
+      # Does not touch any other table (no `prisma db push`). The recruit_bot DB
+      # role has no CREATE privilege on purpose (DML only) — the PeekScout app's
+      # vercel-build `prisma db push` is what actually maintains this table, so
+      # a permission error here is expected and harmless.
       - name: Ensure outreach_prospects table exists
-        run: npm run db:init
+        run: npm run db:init || echo "::notice::db:init skipped (no CREATE perm) — the app's prisma db push maintains the table"
 
       - name: Discover new prospects (today's rotating city)
         run: npm run recruit:discover
