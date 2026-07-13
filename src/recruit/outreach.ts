@@ -58,7 +58,7 @@ function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: st
     ``,
     `I run ${BRAND} — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).`,
     ``,
-    `I already set up a profile for ${p.name} so you don't have to start from scratch. It's reserved for you and hidden until you claim it — takes about 2 minutes to make it live: just add a short intro video (or a few photos) and your booking link.`,
+    `I already set up a profile for ${p.name} so you don't have to start from scratch. It's reserved for you and hidden until you claim it — takes about 2 minutes to make it live: just add a short intro video (or a few photos).`,
     ``,
     `Claim your profile here:`,
     `${claimUrl}`,
@@ -74,7 +74,7 @@ function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: st
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;color:#222;line-height:1.55;max-width:560px;margin:0 auto;padding:24px">
 <p>Hey ${first},</p>
 <p>I run <strong>${BRAND}</strong> — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).</p>
-<p>I already set up a profile for <strong>${p.name}</strong> so you don't have to start from scratch. It's reserved for you and hidden until you claim it — about 2 minutes to make it live: add a short intro video (or a few photos) and your booking link.</p>
+<p>I already set up a profile for <strong>${p.name}</strong> so you don't have to start from scratch. It's reserved for you and hidden until you claim it — about 2 minutes to make it live: add a short intro video (or a few photos).</p>
 <p><a href="${claimUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Claim your profile</a></p>
 <p style="color:#666;font-size:13px">or paste this link: <a href="${claimUrl}">${claimUrl}</a></p>
 <p>Listings are free. Clients book/message/call you directly — no lead fees, no middleman.</p>
