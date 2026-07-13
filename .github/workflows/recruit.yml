@@ -5,12 +5,10 @@ name: Recruit Providers
 # unclaimed draft Provider in the shared PeekScout Postgres and cold-emails a
 # claim link ("we already built your profile"). State lives in outreach_prospects.
 on:
-  # PAUSED until getpeekscout.com is verified in Resend — a live scheduled run
-  # against an unverified sender would mark every prospect FAILED. Uncomment to
-  # resume the daily cron:
-  # schedule:
-  #   # 15:00 UTC = 11 AM EDT / 10 AM EST.
-  #   - cron: "0 15 * * *"
+  # getpeekscout.com verified in Resend 2026-07-12 — daily cron live.
+  schedule:
+    # 15:00 UTC = 11 AM EDT / 10 AM EST.
+    - cron: "0 15 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -82,9 +80,10 @@ jobs:
       - name: Send outreach
         env:
           RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
-          # 8/day while getpeekscout.com warms up — raise to 20 after ~2 weeks
-          # of clean sending (no spam complaints, no bounces spike).
-          MAX_SENDS: ${{ github.event.inputs.max_sends || '8' }}
+          # 20/day = aggressive-but-safe ceiling while getpeekscout.com is
+          # young (verified 2026-07-12). Raise toward 50-100 only after ~2
+          # clean weeks (no spam complaints, bounce rate under ~3%).
+          MAX_SENDS: ${{ github.event.inputs.max_sends || '20' }}
         run: |
           if [ "$RUN_MODE" = "live" ]; then
             npm run recruit:send -- --live --max "$MAX_SENDS"
