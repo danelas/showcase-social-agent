@@ -12,6 +12,7 @@ import { randomUUID } from "crypto";
 import { PrismaClient, PricingUnit } from "@prisma/client";
 import { slugify } from "./slug";
 import { generateProfileCopy } from "./ai";
+import { scrapePhotos } from "./scrape-photos";
 import { CITIES } from "./cities";
 
 export const prisma = new PrismaClient();
@@ -166,6 +167,10 @@ export async function createDraftProvider(p: Sendable): Promise<
     city: p.city,
   });
 
+  // Pull a few photos from their site so the profile can go live as a
+  // slideshow reel the instant they claim — zero effort, no video needed.
+  const gallery = p.website ? await scrapePhotos(p.website, 5).catch(() => []) : [];
+
   const provider = await prisma.provider.create({
     data: {
       slug,
@@ -178,11 +183,14 @@ export async function createDraftProvider(p: Sendable): Promise<
       location,
       phone: p.phone,
       websiteUrl: p.website,
+      gallery,
       pricingUnit: PricingUnit.SESSION,
-      // Approved + active but no media → does not appear in the feed. Unclaimed
-      // until the real owner claims via claimToken and adds their reel.
+      // Hidden until claimed: isActive:false keeps the pre-built profile (and
+      // its scraped photos) out of the feed and off /p/[slug] entirely. The
+      // claim endpoint flips isActive:true, so a gallery-backed profile goes
+      // live as a slideshow the moment the owner claims it.
       isApproved: true,
-      isActive: true,
+      isActive: false,
       claimed: false,
       claimToken,
       seededFrom: "google places (recruit)",
