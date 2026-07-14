@@ -13,6 +13,9 @@ import { PrismaClient, PricingUnit } from "@prisma/client";
 import { slugify } from "./slug";
 import { generateProfileCopy } from "./ai";
 import { scrapePhotos } from "./scrape-photos";
+import { renderBrandedReel } from "./render-video";
+import { uploadMedia } from "./upload";
+import { rm } from "fs/promises";
 import { CITIES } from "./cities";
 
 export const prisma = new PrismaClient();
@@ -167,9 +170,37 @@ export async function createDraftProvider(p: Sendable): Promise<
     city: p.city,
   });
 
-  // Pull a few photos from their site so the profile can go live as a
-  // slideshow reel the instant they claim — zero effort, no video needed.
-  const gallery = p.website ? await scrapePhotos(p.website, 5).catch(() => []) : [];
+  // Build a branded reel from their site: a clean title card (always) plus
+  // their framable photos as slides when we find good ones. Rendered + hosted
+  // so the profile goes live as a real video the instant they claim — zero
+  // effort. Fail-open: any problem → no video, we still try a photo gallery.
+  const candidates = p.website ? await scrapePhotos(p.website, 10).catch(() => []) : [];
+  let videoUrl: string | null = null;
+  let videoPoster: string | null = null;
+  let gallery: string[] = [];
+
+  const reel = await renderBrandedReel(
+    { name: p.name, category: p.categoryName, city: p.city, slug },
+    candidates,
+  ).catch(() => null);
+  if (reel) {
+    gallery = reel.galleryUrls;
+    try {
+      const v = await uploadMedia(reel.videoPath, "video", "mp4", "video/mp4");
+      const poster = await uploadMedia(reel.posterPath, "image", "jpg", "image/jpeg");
+      if (v) {
+        videoUrl = v;
+        videoPoster = poster;
+      }
+    } finally {
+      await rm(reel.dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+  // If the video didn't upload but we found framable photos, fall back to a
+  // photo-only gallery (still a slideshow reel on claim).
+  if (!videoUrl && gallery.length === 0 && candidates.length) {
+    gallery = candidates.slice(0, 5);
+  }
 
   const provider = await prisma.provider.create({
     data: {
@@ -183,6 +214,8 @@ export async function createDraftProvider(p: Sendable): Promise<
       location,
       phone: p.phone,
       websiteUrl: p.website,
+      videoUrl,
+      videoPoster,
       gallery,
       pricingUnit: PricingUnit.SESSION,
       // Hidden until claimed: isActive:false keeps the pre-built profile (and
