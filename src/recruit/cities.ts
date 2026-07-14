@@ -1,31 +1,19 @@
-// City rotation for provider recruitment. Med-spa / aesthetics ad culture is
-// densest in FL, TX, CA, AZ, NY — front-loaded here. One city per daily cron
-// run; the full list cycles roughly once a month.
+// City rotation for provider recruitment. Focused on the operator's target
+// markets: South Florida (Miami / Fort Lauderdale), New York, and California
+// (spread across its main metros). One city per daily cron run; the list
+// cycles every ~10 days so each market gets hit a few times a month.
 export type City = { slug: string; name: string; stateCode: string };
 
 export const CITIES: City[] = [
   { slug: "miami", name: "Miami", stateCode: "FL" },
   { slug: "fort-lauderdale", name: "Fort Lauderdale", stateCode: "FL" },
-  { slug: "boca-raton", name: "Boca Raton", stateCode: "FL" },
-  { slug: "west-palm-beach", name: "West Palm Beach", stateCode: "FL" },
-  { slug: "tampa", name: "Tampa", stateCode: "FL" },
-  { slug: "orlando", name: "Orlando", stateCode: "FL" },
-  { slug: "scottsdale", name: "Scottsdale", stateCode: "AZ" },
-  { slug: "phoenix", name: "Phoenix", stateCode: "AZ" },
-  { slug: "dallas", name: "Dallas", stateCode: "TX" },
-  { slug: "houston", name: "Houston", stateCode: "TX" },
-  { slug: "austin", name: "Austin", stateCode: "TX" },
+  { slug: "new-york", name: "New York", stateCode: "NY" },
   { slug: "los-angeles", name: "Los Angeles", stateCode: "CA" },
   { slug: "san-diego", name: "San Diego", stateCode: "CA" },
   { slug: "beverly-hills", name: "Beverly Hills", stateCode: "CA" },
-  { slug: "las-vegas", name: "Las Vegas", stateCode: "NV" },
-  { slug: "new-york", name: "New York", stateCode: "NY" },
-  { slug: "atlanta", name: "Atlanta", stateCode: "GA" },
-  { slug: "nashville", name: "Nashville", stateCode: "TN" },
-  { slug: "denver", name: "Denver", stateCode: "CO" },
-  { slug: "chicago", name: "Chicago", stateCode: "IL" },
-  { slug: "charlotte", name: "Charlotte", stateCode: "NC" },
-  { slug: "seattle", name: "Seattle", stateCode: "WA" },
+  { slug: "orange-county", name: "Newport Beach", stateCode: "CA" },
+  { slug: "san-francisco", name: "San Francisco", stateCode: "CA" },
+  { slug: "san-jose", name: "San Jose", stateCode: "CA" },
 ];
 
 /** Day-of-year rotation — same city all day, cycles through the list monthly. */
