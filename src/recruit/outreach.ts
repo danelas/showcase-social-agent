@@ -20,6 +20,10 @@ import {
   createDraftProvider,
   markSent,
   markFailed,
+  getFollowupBatch,
+  claimedProviderIds,
+  markFollowedUp,
+  markConverted,
   prisma,
   type Sendable,
 } from "./db";
@@ -116,12 +120,95 @@ async function sendViaResend(opts: { to: string; subject: string; text: string; 
   }
 }
 
+// Second-touch nudge for prospects who got the first email but haven't claimed.
+function renderFollowup(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
+  const first = firstName(p);
+  const cat = p.categoryName.toLowerCase();
+
+  const subject = `Still holding your ${BRAND} profile, ${p.name}`;
+
+  const text = [
+    `Hey ${first},`,
+    ``,
+    `Quick nudge — the ${BRAND} profile I set up for ${p.name} is still reserved for you. ${p.city} clients are scrolling ${cat} clips and booking right now, and yours goes live the minute you add a short video (about 2 minutes).`,
+    ``,
+    `Claim it here:`,
+    `${claimUrl}`,
+    ``,
+    `Free to list, and clients book/message/call you directly — no lead fees. If it's not for you, just reply "no thanks" and I'll take the profile down.`,
+    ``,
+    `— Dan, ${BRAND}`,
+  ].join("\n");
+
+  const html = `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;color:#222;line-height:1.55;max-width:560px;margin:0 auto;padding:24px">
+<p>Hey ${first},</p>
+<p>Quick nudge — the <strong>${BRAND}</strong> profile I set up for <strong>${p.name}</strong> is still reserved for you. ${p.city} clients are scrolling ${cat} clips and booking right now, and yours goes live the minute you add a short video (about 2 minutes).</p>
+<p><a href="${claimUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Claim your profile</a></p>
+<p style="color:#666;font-size:13px">or paste this link: <a href="${claimUrl}">${claimUrl}</a></p>
+<p>Free to list, and clients book/message/call you directly — no lead fees. If it's not for you, just reply "no thanks" and I'll take the profile down.</p>
+<p>— Dan, ${BRAND}</p>
+</body></html>`;
+
+  return { subject, text, html };
+}
+
+async function runFollowup(live: boolean, max: number, delayMs: number) {
+  const minAgeDays = Number(arg("min-age-days") ?? "3");
+  const batch = await getFollowupBatch({ limit: max, minAgeDays });
+  console.log(`[followup] ${batch.length} prospects emailed ≥${minAgeDays}d ago and still SENT (cap ${max})`);
+  console.log(`[followup] mode: ${live ? "LIVE" : "DRY-RUN"}\n`);
+  if (batch.length === 0) {
+    console.log("Nothing to follow up.");
+    return;
+  }
+
+  // Skip (and mark CONVERTED) anyone who already claimed since the first email.
+  const claimed = await claimedProviderIds(batch.map((b) => b.providerId));
+
+  let sent = 0, converted = 0, failed = 0;
+  for (let i = 0; i < batch.length; i++) {
+    const p = batch[i];
+    const tag = `[${i + 1}/${batch.length}]`;
+    if (claimed.has(p.providerId)) {
+      await markConverted(p.id).catch(() => {});
+      converted++;
+      console.log(`${tag} ${p.name} — already claimed ✓ marked CONVERTED, skipping`);
+      continue;
+    }
+    const to = p.primaryEmail!;
+    const claimUrl = `${APP_URL}/claim/${p.claimToken}`;
+    console.log(`${tag} → ${to}  (${p.name}, ${p.city})`);
+    if (!live) {
+      if (i < 5) console.log(`     subject: ${renderFollowup(p, claimUrl).subject}`);
+      continue;
+    }
+    try {
+      const { subject, text, html } = renderFollowup(p, claimUrl);
+      await sendViaResend({ to, subject, text, html });
+      await markFollowedUp(p.id);
+      sent++;
+      console.log(`     ✓ follow-up sent`);
+    } catch (e) {
+      failed++;
+      console.log(`     ✗ ${(e as Error).message}`);
+    }
+    if (i < batch.length - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  console.log(`\n[followup] ${live ? "live" : "dry"} complete: ${sent} sent, ${converted} already-claimed, ${failed} failed`);
+}
+
 async function main() {
   const live = flag("live");
   const max = Number(arg("max") ?? "20");
   const categoryName = arg("category");
   const city = arg("city");
   const delayMs = Number(arg("delay") ?? "5000");
+
+  if (flag("followup")) {
+    await runFollowup(live, max, delayMs);
+    return;
+  }
 
   const batch = await getSendable({ limit: max, categoryName, city });
 

@@ -9,6 +9,7 @@
     "db:init": "prisma db execute --file prisma/create-outreach-table.sql --schema prisma/schema.prisma",
     "recruit:discover": "tsx src/recruit/discover.ts",
     "recruit:send": "tsx src/recruit/outreach.ts",
+    "recruit:followup": "tsx src/recruit/outreach.ts --followup",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

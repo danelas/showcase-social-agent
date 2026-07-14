@@ -217,6 +217,47 @@ export async function markFailed(id: string, error: string): Promise<void> {
   });
 }
 
+// ─── Follow-up (one nudge to prospects who got the first email but haven't
+// claimed). Uses the status column, so no schema migration: SENT → FOLLOWED_UP.
+export type Followupable = Sendable & { claimToken: string; providerId: string };
+
+export async function getFollowupBatch(opts: {
+  limit: number;
+  minAgeDays: number;
+}): Promise<Followupable[]> {
+  const cutoff = new Date(Date.now() - opts.minAgeDays * 86_400_000);
+  const rows = await prisma.outreachProspect.findMany({
+    where: {
+      status: "SENT", // exactly SENT — REPLIED/UNSUB/CONVERTED/FOLLOWED_UP excluded
+      primaryEmail: { not: null },
+      providerId: { not: null },
+      claimToken: { not: null },
+      sentAt: { lte: cutoff },
+    },
+    orderBy: { sentAt: "asc" },
+    take: opts.limit,
+  });
+  return rows.map((r) => ({ ...toSendable(r), claimToken: r.claimToken!, providerId: r.providerId! }));
+}
+
+/** Which of these draft providers have actually been claimed (so we skip + convert). */
+export async function claimedProviderIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await prisma.provider.findMany({
+    where: { id: { in: ids }, claimed: true },
+    select: { id: true },
+  });
+  return new Set(rows.map((r) => r.id));
+}
+
+export async function markFollowedUp(id: string): Promise<void> {
+  await prisma.outreachProspect.update({ where: { id }, data: { status: "FOLLOWED_UP" } });
+}
+
+export async function markConverted(id: string): Promise<void> {
+  await prisma.outreachProspect.update({ where: { id }, data: { status: "CONVERTED" } });
+}
+
 export async function summary(): Promise<Record<string, number>> {
   const rows = await prisma.outreachProspect.groupBy({
     by: ["status"],

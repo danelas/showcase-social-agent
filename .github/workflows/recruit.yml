@@ -18,9 +18,14 @@ on:
         type: choice
         options: ["live", "dry-run"]
       max_sends:
-        description: "Cap on emails sent this run"
+        description: "Cap on first-touch emails sent this run"
         required: false
         default: "20"
+        type: string
+      max_followups:
+        description: "Cap on follow-up emails sent this run"
+        required: false
+        default: "15"
         type: string
 
 jobs:
@@ -89,4 +94,18 @@ jobs:
             npm run recruit:send -- --live --max "$MAX_SENDS"
           else
             npm run recruit:send -- --max "$MAX_SENDS"
+          fi
+
+      # Second touch: one nudge to prospects emailed >=3 days ago who still
+      # haven't claimed. Also reconciles claimed prospects to CONVERTED. A
+      # separate cap keeps total daily volume in check.
+      - name: Send follow-ups
+        env:
+          RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
+          MAX_FOLLOWUPS: ${{ github.event.inputs.max_followups || '15' }}
+        run: |
+          if [ "$RUN_MODE" = "live" ]; then
+            npm run recruit:followup -- --live --max "$MAX_FOLLOWUPS" --min-age-days 3
+          else
+            npm run recruit:followup -- --max "$MAX_FOLLOWUPS" --min-age-days 3
           fi
