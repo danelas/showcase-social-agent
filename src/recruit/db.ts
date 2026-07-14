@@ -12,6 +12,7 @@ import { randomUUID } from "crypto";
 import { PrismaClient, PricingUnit } from "@prisma/client";
 import { slugify } from "./slug";
 import { generateProfileCopy } from "./ai";
+import { CITIES } from "./cities";
 
 export const prisma = new PrismaClient();
 
@@ -66,36 +67,66 @@ export async function insertProspect(p: Prospect): Promise<void> {
 
 export type Sendable = Prospect & { id: string };
 
-/** NEW prospects with a primary email, oldest first. */
+type ProspectRow = Awaited<ReturnType<typeof prisma.outreachProspect.findMany>>[number];
+const toSendable = (r: ProspectRow): Sendable => ({
+  id: r.id,
+  placeKey: r.placeKey,
+  name: r.name,
+  categoryName: r.categoryName,
+  city: r.city,
+  state: r.state,
+  address: r.address,
+  phone: r.phone,
+  website: r.website,
+  emails: r.emails,
+  primaryEmail: r.primaryEmail,
+  query: r.query,
+});
+
+/**
+ * NEW prospects with a primary email. When no explicit city is requested,
+ * target-market prospects (the current CITIES list) are emailed FIRST and any
+ * legacy backlog (e.g. old Nashville prospects) only fills leftover slots — so
+ * pointing the recruiter at new cities takes effect immediately instead of
+ * waiting weeks for the old queue to drain.
+ */
 export async function getSendable(opts: {
   limit: number;
   categoryName?: string;
   city?: string;
 }): Promise<Sendable[]> {
-  const rows = await prisma.outreachProspect.findMany({
-    where: {
-      status: "NEW",
-      primaryEmail: { not: null },
-      ...(opts.categoryName ? { categoryName: opts.categoryName } : {}),
-      ...(opts.city ? { city: { equals: opts.city, mode: "insensitive" } } : {}),
-    },
+  const baseWhere = {
+    status: "NEW",
+    primaryEmail: { not: null },
+    ...(opts.categoryName ? { categoryName: opts.categoryName } : {}),
+  };
+
+  // Explicit city filter → honor it exactly (targeted/manual runs).
+  if (opts.city) {
+    const rows = await prisma.outreachProspect.findMany({
+      where: { ...baseWhere, city: { equals: opts.city, mode: "insensitive" } },
+      orderBy: { scrapedAt: "asc" },
+      take: opts.limit,
+    });
+    return rows.map(toSendable);
+  }
+
+  const priorityNames = CITIES.map((c) => c.name);
+  const priority = await prisma.outreachProspect.findMany({
+    where: { ...baseWhere, city: { in: priorityNames } },
     orderBy: { scrapedAt: "asc" },
     take: opts.limit,
   });
-  return rows.map((r) => ({
-    id: r.id,
-    placeKey: r.placeKey,
-    name: r.name,
-    categoryName: r.categoryName,
-    city: r.city,
-    state: r.state,
-    address: r.address,
-    phone: r.phone,
-    website: r.website,
-    emails: r.emails,
-    primaryEmail: r.primaryEmail,
-    query: r.query,
-  }));
+  let rows = priority;
+  if (rows.length < opts.limit) {
+    const rest = await prisma.outreachProspect.findMany({
+      where: { ...baseWhere, city: { notIn: priorityNames } },
+      orderBy: { scrapedAt: "asc" },
+      take: opts.limit - rows.length,
+    });
+    rows = [...priority, ...rest];
+  }
+  return rows.map(toSendable);
 }
 
 const categoryIdCache = new Map<string, string | null>();
