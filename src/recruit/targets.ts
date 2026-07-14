@@ -7,8 +7,9 @@
 //   solo     — independent / freelance / mobile providers listed under a name
 // The daily cron runs both. Med spa & aesthetics leads (highest local ad
 // budgets + heaviest existing reel culture), then the rest of the video-strong
-// service set. Real-estate / mortgage / interior-design categories are omitted
-// here — they need a different pitch than "we filmed-ready your profile."
+// service set — now ALL PeekScout categories. The send interleaves categories
+// (see getSendable) so recruitment spreads across them instead of draining
+// med spa first.
 
 export type Target = {
   categoryName: string;
@@ -66,6 +67,36 @@ export const TARGETS: Target[] = [
     categoryName: "Cleaning",
     business: ["house cleaning service", "maid service"],
     solo: ["independent house cleaner", "self-employed housekeeper"],
+  },
+  {
+    categoryName: "Barbers",
+    business: ["barbershop", "barber shop"],
+    solo: ["independent barber", "booth rental barber", "mobile barber"],
+  },
+  {
+    categoryName: "Photography",
+    business: ["photography studio"],
+    solo: ["freelance photographer", "independent photographer", "portrait photographer"],
+  },
+  {
+    categoryName: "Auto Detailing",
+    business: ["auto detailing", "car detailing shop"],
+    solo: ["mobile auto detailer", "independent car detailer"],
+  },
+  {
+    categoryName: "Real Estate",
+    business: ["real estate agency"],
+    solo: ["real estate agent", "realtor"],
+  },
+  {
+    categoryName: "Mortgage & Lending",
+    business: ["mortgage broker", "mortgage company"],
+    solo: ["independent mortgage broker", "loan officer"],
+  },
+  {
+    categoryName: "Interior Design & Staging",
+    business: ["interior design studio", "home staging company"],
+    solo: ["independent interior designer", "freelance home stager"],
   },
 ];
 

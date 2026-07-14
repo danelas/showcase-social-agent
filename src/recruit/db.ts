@@ -115,22 +115,52 @@ export async function getSendable(opts: {
     return rows.map(toSendable);
   }
 
+  // Pull a generous pool (target cities first, then the rest), then round-robin
+  // by category so recruitment spreads across ALL categories instead of
+  // draining whichever was discovered first (med spa). Target-city + recency
+  // order is preserved inside each category group.
   const priorityNames = CITIES.map((c) => c.name);
+  const poolCap = Math.max(opts.limit * 8, 160);
   const priority = await prisma.outreachProspect.findMany({
     where: { ...baseWhere, city: { in: priorityNames } },
     orderBy: { scrapedAt: "asc" },
-    take: opts.limit,
+    take: poolCap,
   });
-  let rows = priority;
-  if (rows.length < opts.limit) {
+  let pool = priority;
+  if (pool.length < poolCap) {
     const rest = await prisma.outreachProspect.findMany({
       where: { ...baseWhere, city: { notIn: priorityNames } },
       orderBy: { scrapedAt: "asc" },
-      take: opts.limit - rows.length,
+      take: poolCap - pool.length,
     });
-    rows = [...priority, ...rest];
+    pool = [...priority, ...rest];
   }
-  return rows.map(toSendable);
+  return roundRobinByCategory(pool, opts.limit).map(toSendable);
+}
+
+// Pick up to `limit` prospects, rotating through categories one at a time so no
+// single category dominates. Preserves each category's incoming (pool) order.
+function roundRobinByCategory(pool: ProspectRow[], limit: number): ProspectRow[] {
+  const groups = new Map<string, ProspectRow[]>();
+  for (const r of pool) {
+    const k = r.categoryName || "other";
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
+  }
+  const queues = Array.from(groups.values());
+  const out: ProspectRow[] = [];
+  let progress = true;
+  while (out.length < limit && progress) {
+    progress = false;
+    for (const q of queues) {
+      if (out.length >= limit) break;
+      const next = q.shift();
+      if (next) {
+        out.push(next);
+        progress = true;
+      }
+    }
+  }
+  return out;
 }
 
 const categoryIdCache = new Map<string, string | null>();

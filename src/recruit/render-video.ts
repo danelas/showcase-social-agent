@@ -267,9 +267,12 @@ export async function renderBrandedReel(
   const dir = await mkdtemp(join(tmpdir(), "peekreel-"));
   try {
     // Category-relevant backdrop for the title card (null → gradient fallback).
-    let bgFile: string | null = join(dir, "bg");
+    let bgFile: string | null = null;
     const bgUrl = categoryBackground(info.category, info.slug);
-    if (!(await download(bgUrl, bgFile))) bgFile = null;
+    if (bgUrl) {
+      bgFile = join(dir, "bg");
+      if (!(await download(bgUrl, bgFile))) bgFile = null;
+    }
 
     const title = await renderTitleCard(dir, font, info, bgFile);
 

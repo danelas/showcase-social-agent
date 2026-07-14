@@ -31,9 +31,9 @@ on:
 jobs:
   recruit:
     runs-on: ubuntu-latest
-    # Discover scrapes each new prospect's website for an email — a full city
-    # sweep across all categories runs well past 20 minutes.
-    timeout-minutes: 45
+    # Discover scrapes each new prospect's website for an email + renders a
+    # branded reel per send — a full 16-category city sweep is lengthy.
+    timeout-minutes: 60
     env:
       GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}

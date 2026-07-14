@@ -50,17 +50,19 @@ const BG: Record<string, string[]> = {
   ],
 };
 
-// Neutral fallback for categories without a curated backdrop.
-const DEFAULT_BG = [P("5659238", "pexels-photo-5659238.jpeg")];
-
 function hash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
-/** Deterministic backdrop for a provider: varies by slug, stable per provider. */
-export function categoryBackground(categoryName: string, slug: string): string {
-  const list = BG[categoryName] ?? DEFAULT_BG;
+/**
+ * Deterministic backdrop for a provider (varies by slug, stable per provider),
+ * or null when the category has no curated image — the title card then uses
+ * the clean gradient instead of a mismatched photo.
+ */
+export function categoryBackground(categoryName: string, slug: string): string | null {
+  const list = BG[categoryName];
+  if (!list || list.length === 0) return null;
   return list[hash(slug) % list.length];
 }
