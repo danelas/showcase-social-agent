@@ -6,6 +6,7 @@
  * picked deterministically by slug so a given provider is stable.
  */
 const P = (id: string, file: string) => `https://images.pexels.com/videos/${id}/${file}`;
+const PH = (id: string) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg`;
 
 // Keyed by Category.name (exactly what the recruiter stores as categoryName).
 const BG: Record<string, string[]> = {
@@ -48,6 +49,9 @@ const BG: Record<string, string[]> = {
   "Mortgage & Lending": [
     P("7646610", "adult-business-buying-a-house-chair-7646610.jpeg"),
   ],
+  "Photography": [PH("13699196"), PH("3800848"), PH("8389706")],
+  "Auto Detailing": [PH("29504462"), PH("6873098"), PH("14021836")],
+  "Interior Design & Staging": [PH("32579238"), PH("9849647"), PH("6615107")],
 };
 
 function hash(s: string): number {
