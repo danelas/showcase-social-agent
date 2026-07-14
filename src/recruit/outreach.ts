@@ -91,10 +91,21 @@ async function sendViaResend(opts: { to: string; subject: string; text: string; 
   if (!apiKey) throw new Error("RESEND_API_KEY not set");
   if (!from) throw new Error("RESEND_FROM_EMAIL not set");
 
+  // Replies land in the operator's real inbox, not the send-only sender
+  // domain. Overridable via env; defaults to Dan's Gmail.
+  const replyTo = process.env.RESEND_REPLY_TO || "danamazon6@gmail.com";
+
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text }),
+    body: JSON.stringify({
+      from,
+      to: opts.to,
+      reply_to: replyTo,
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text,
+    }),
   });
   const body = await resp.text();
   if (!resp.ok) throw new Error(`Resend ${resp.status}: ${body.slice(0, 200)}`);
