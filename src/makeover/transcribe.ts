@@ -1,9 +1,13 @@
 /**
  * Speech-to-text for captions. Extracts a small mono WAV with ffmpeg, then
- * transcribes it with Groq's Whisper (whisper-large-v3) — fast, cheap, and
- * returns word-level timestamps we use to build karaoke-style captions.
+ * transcribes it with OpenAI's Whisper (whisper-1) — returns word-level
+ * timestamps we use to build karaoke-style captions. Uses the same
+ * OPENAI_API_KEY already configured for the project.
  *
- * Fail-open: no GROQ_API_KEY, silent audio, or an API error returns null and
+ * whisper-1 is required for word timestamps: the newer gpt-4o-transcribe models
+ * don't support verbose_json / timestamp_granularities.
+ *
+ * Fail-open: no OPENAI_API_KEY, silent audio, or an API error returns null and
  * the render simply skips captions.
  */
 import { join } from "path";
@@ -13,7 +17,7 @@ import { run } from "./proc";
 export type Word = { word: string; start: number; end: number };
 export type Transcript = { text: string; words: Word[] };
 
-const GROQ_MODEL = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3";
+const WHISPER_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1";
 
 // ffmpeg → 16kHz mono WAV (what Whisper wants; keeps the upload tiny).
 async function extractAudio(videoPath: string, dir: string): Promise<string | null> {
@@ -27,9 +31,9 @@ async function extractAudio(videoPath: string, dir: string): Promise<string | nu
 }
 
 export async function transcribe(videoPath: string, dir: string): Promise<Transcript | null> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.log("     GROQ_API_KEY unset — skipping captions");
+    console.log("     OPENAI_API_KEY unset — skipping captions");
     return null;
   }
 
@@ -40,17 +44,17 @@ export async function transcribe(videoPath: string, dir: string): Promise<Transc
     const bytes = await readFile(audio);
     const form = new FormData();
     form.append("file", new Blob([bytes], { type: "audio/wav" }), "audio.wav");
-    form.append("model", GROQ_MODEL);
+    form.append("model", WHISPER_MODEL);
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
 
-    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
     });
     if (!res.ok) {
-      console.log(`     Groq ${res.status}: ${(await res.text()).slice(0, 160)}`);
+      console.log(`     OpenAI transcribe ${res.status}: ${(await res.text()).slice(0, 160)}`);
       return null;
     }
     const data = (await res.json()) as {
