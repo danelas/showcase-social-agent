@@ -55,21 +55,36 @@ function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: st
   const first = firstName(p);
   const cat = p.categoryName.toLowerCase();
 
-  const subject = `I built you a ${BRAND} profile — ${p.city} clients are watching`;
+  // Lead with the free Video Makeover (irresistible, no-commitment hook). The
+  // reserved profile / claim link rides along as a lighter secondary CTA. The
+  // makeover link prefills the /makeover form (business name + service) so it's
+  // a 30-second submit.
+  const makeoverUrl =
+    `${APP_URL}/makeover?b=${encodeURIComponent(p.name)}` +
+    `&s=${encodeURIComponent(p.categoryName)}&src=recruit`;
+
+  const subject = `Free video makeover for ${p.name} — captions, hook, the works`;
 
   const text = [
     `Hey ${first},`,
     ``,
     `I run ${BRAND} — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).`,
     ``,
-    `I already set up a profile for ${p.name} so you don't have to start from scratch. It's reserved for you and hidden until you claim it — takes about 2 minutes to make it live: just add a short intro video (or a few photos).`,
+    `Want to see what good looks like, on the house? Send me one of your Instagram or TikTok videos and I'll make it over — free. I'll:`,
+    `  • add captions`,
+    `  • sharpen the opening hook`,
+    `  • make a clean cover image`,
+    `  • format it vertical for Reels/TikTok`,
+    `  • put ${p.name} + your service right on it`,
     ``,
-    `Claim your profile here:`,
-    `${claimUrl}`,
+    `You get it back to download and repost anywhere — no strings.`,
     ``,
-    `Listings are free. Clients book/message/call you directly — no lead fees, no middleman.`,
+    `Start here (about 30 seconds):`,
+    `${makeoverUrl}`,
     ``,
-    `Not interested? Reply "no thanks" and I'll delete the profile and won't reach out again.`,
+    `(I also reserved you a free ${BRAND} profile so ${p.city} clients can find you — claim it anytime: ${claimUrl})`,
+    ``,
+    `Not interested? Reply "no thanks" and I won't reach out again.`,
     ``,
     `— Dan, ${BRAND}`,
   ].join("\n");
@@ -78,11 +93,19 @@ function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: st
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;color:#222;line-height:1.55;max-width:560px;margin:0 auto;padding:24px">
 <p>Hey ${first},</p>
 <p>I run <strong>${BRAND}</strong> — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).</p>
-<p>I already set up a profile for <strong>${p.name}</strong> so you don't have to start from scratch. It's reserved for you and hidden until you claim it — about 2 minutes to make it live: add a short intro video (or a few photos).</p>
-<p><a href="${claimUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Claim your profile</a></p>
-<p style="color:#666;font-size:13px">or paste this link: <a href="${claimUrl}">${claimUrl}</a></p>
-<p>Listings are free. Clients book/message/call you directly — no lead fees, no middleman.</p>
-<p>Not interested? Reply "no thanks" and I'll delete the profile and won't reach out again.</p>
+<p>Want to see what good looks like, on the house? Send me one of your Instagram or TikTok videos and I'll <strong>make it over — free</strong>:</p>
+<ul style="margin:0 0 4px;padding-left:20px;color:#333">
+<li>add captions</li>
+<li>sharpen the opening hook</li>
+<li>make a clean cover image</li>
+<li>format it vertical for Reels/TikTok</li>
+<li>put <strong>${p.name}</strong> + your service right on it</li>
+</ul>
+<p>You get it back to download and repost anywhere — no strings.</p>
+<p><a href="${makeoverUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Get my free makeover</a></p>
+<p style="color:#666;font-size:13px">or paste this link: <a href="${makeoverUrl}">${makeoverUrl}</a></p>
+<p style="color:#666;font-size:13px">I also reserved you a free ${BRAND} profile so ${p.city} clients can find you — <a href="${claimUrl}">claim it anytime</a>.</p>
+<p>Not interested? Reply "no thanks" and I won't reach out again.</p>
 <p>— Dan, ${BRAND}</p>
 </body></html>`;
 
