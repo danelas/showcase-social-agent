@@ -321,7 +321,11 @@ export async function markFailed(id: string, error: string): Promise<void> {
 
 // ─── Follow-up (one nudge to prospects who got the first email but haven't
 // claimed). Uses the status column, so no schema migration: SENT → FOLLOWED_UP.
-export type Followupable = Sendable & { claimToken: string; providerId: string };
+export type Followupable = Sendable & {
+  claimToken: string;
+  providerId: string;
+  emailVariant: string | null;
+};
 
 export async function getFollowupBatch(opts: {
   limit: number;
@@ -339,7 +343,12 @@ export async function getFollowupBatch(opts: {
     orderBy: { sentAt: "asc" },
     take: opts.limit,
   });
-  return rows.map((r) => ({ ...toSendable(r), claimToken: r.claimToken!, providerId: r.providerId! }));
+  return rows.map((r) => ({
+    ...toSendable(r),
+    claimToken: r.claimToken!,
+    providerId: r.providerId!,
+    emailVariant: r.emailVariant,
+  }));
 }
 
 /** Which of these draft providers have actually been claimed (so we skip + convert). */

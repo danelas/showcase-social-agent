@@ -203,8 +203,62 @@ async function sendViaResend(opts: { to: string; subject: string; text: string; 
   }
 }
 
-// Second-touch nudge for prospects who got the first email but haven't claimed.
-function renderFollowup(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
+// Resolve which A/B arm a prospect is in — prefer the stored variant, fall back
+// to the deterministic assignment (covers rows sent before the column existed).
+function resolveVariant(stored: string | null, id: string): EmailVariant {
+  return stored === "makeover" ? "makeover" : stored === "claim" ? "claim" : emailVariantFor(id);
+}
+
+// Second-touch nudge, matched to the prospect's first-touch A/B variant so the
+// experience (and the experiment) stays consistent end-to-end.
+function renderFollowup(
+  p: Sendable,
+  claimUrl: string,
+  variant: EmailVariant,
+): { subject: string; text: string; html: string } {
+  return variant === "makeover" ? renderMakeoverFollowup(p, claimUrl) : renderClaimFollowup(p, claimUrl);
+}
+
+// Follow-up for the makeover arm — nudge them to still grab the free makeover.
+function renderMakeoverFollowup(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
+  const first = firstName(p);
+  const makeoverUrl =
+    `${APP_URL}/makeover?b=${encodeURIComponent(p.name)}` +
+    `&s=${encodeURIComponent(p.categoryName)}&src=recruit-fu`;
+
+  const subject = `Still up for a free video makeover, ${p.name}?`;
+
+  const text = [
+    `Hey ${first},`,
+    ``,
+    `Quick nudge — my offer still stands. Send me one of your Instagram or TikTok videos and I'll make it over free: captions, a stronger opening hook, a clean cover, vertical format, and ${p.name} on it. You get it back to download and repost anywhere.`,
+    ``,
+    `Grab it here (about 30 seconds):`,
+    `${makeoverUrl}`,
+    ``,
+    `(Your ${BRAND} profile is still reserved too — claim it anytime: ${claimUrl})`,
+    ``,
+    `Not interested? Reply "no thanks" and I won't reach out again.`,
+    ``,
+    `— Dan, ${BRAND}`,
+  ].join("\n");
+
+  const html = `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;color:#222;line-height:1.55;max-width:560px;margin:0 auto;padding:24px">
+<p>Hey ${first},</p>
+<p>Quick nudge — my offer still stands. Send me one of your Instagram or TikTok videos and I'll <strong>make it over free</strong>: captions, a stronger opening hook, a clean cover, vertical format, and <strong>${p.name}</strong> on it. You get it back to download and repost anywhere.</p>
+<p><a href="${makeoverUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Get my free makeover</a></p>
+<p style="color:#666;font-size:13px">or paste this link: <a href="${makeoverUrl}">${makeoverUrl}</a></p>
+<p style="color:#666;font-size:13px">Your ${BRAND} profile is still reserved too — <a href="${claimUrl}">claim it anytime</a>.</p>
+<p>Not interested? Reply "no thanks" and I won't reach out again.</p>
+<p>— Dan, ${BRAND}</p>
+</body></html>`;
+
+  return { subject, text, html };
+}
+
+// Follow-up for the claim arm — the classic "still holding your profile" nudge.
+function renderClaimFollowup(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
   const first = firstName(p);
   const cat = p.categoryName.toLowerCase();
 
@@ -261,17 +315,18 @@ async function runFollowup(live: boolean, max: number, delayMs: number) {
     }
     const to = p.primaryEmail!;
     const claimUrl = `${APP_URL}/claim/${p.claimToken}`;
+    const variant = resolveVariant(p.emailVariant, p.id);
     console.log(`${tag} → ${to}  (${p.name}, ${p.city})`);
     if (!live) {
-      if (i < 5) console.log(`     subject: ${renderFollowup(p, claimUrl).subject}`);
+      if (i < 5) console.log(`     [${variant}] subject: ${renderFollowup(p, claimUrl, variant).subject}`);
       continue;
     }
     try {
-      const { subject, text, html } = renderFollowup(p, claimUrl);
+      const { subject, text, html } = renderFollowup(p, claimUrl, variant);
       await sendViaResend({ to, subject, text, html });
       await markFollowedUp(p.id);
       sent++;
-      console.log(`     ✓ follow-up sent`);
+      console.log(`     ✓ [${variant}] follow-up sent`);
     } catch (e) {
       failed++;
       console.log(`     ✗ ${(e as Error).message}`);
