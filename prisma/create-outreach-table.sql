@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS "outreach_prospects" (
   "resendId"     TEXT,
   "sendError"    TEXT,
   "query"        TEXT,
+  "emailVariant" TEXT,
   "scrapedAt"    TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "sentAt"       TIMESTAMP(3),
   "updatedAt"    TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP,

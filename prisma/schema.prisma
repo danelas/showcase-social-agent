@@ -200,6 +200,7 @@ model OutreachProspect {
   resendId     String?
   sendError    String?
   query        String?
+  emailVariant String?  // first-touch A/B: "makeover" | "claim"
 
   scrapedAt    DateTime @default(now())
   sentAt       DateTime?

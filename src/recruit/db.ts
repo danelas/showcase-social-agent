@@ -267,7 +267,7 @@ export async function createDraftProvider(p: Sendable): Promise<
 
 export async function markSent(
   id: string,
-  data: { providerId: string; claimToken: string; resendId: string | null },
+  data: { providerId: string; claimToken: string; resendId: string | null; emailVariant?: string },
 ): Promise<void> {
   await prisma.outreachProspect.update({
     where: { id },
@@ -276,9 +276,40 @@ export async function markSent(
       providerId: data.providerId,
       claimToken: data.claimToken,
       resendId: data.resendId,
+      emailVariant: data.emailVariant,
       sentAt: new Date(),
     },
   });
+}
+
+// First-touch A/B result: claim rate by email variant. Claims are read live
+// from providers.claimed (the true conversion), so this is accurate even if the
+// follow-up reconciler hasn't marked rows CONVERTED yet.
+export async function abReport(): Promise<void> {
+  const rows = await prisma.outreachProspect.findMany({
+    where: { emailVariant: { not: null }, providerId: { not: null } },
+    select: { emailVariant: true, providerId: true },
+  });
+  const claimed = await claimedProviderIds(rows.map((r) => r.providerId!));
+
+  const stats: Record<string, { sent: number; claimed: number }> = {};
+  for (const r of rows) {
+    const v = r.emailVariant!;
+    (stats[v] ??= { sent: 0, claimed: 0 }).sent++;
+    if (r.providerId && claimed.has(r.providerId)) stats[v].claimed++;
+  }
+
+  console.log("\n[A/B] first-touch email — claim conversion by variant:");
+  const keys = Object.keys(stats).sort();
+  if (!keys.length) {
+    console.log("  (no variant-tagged sends yet)");
+    return;
+  }
+  for (const v of keys) {
+    const s = stats[v];
+    const rate = s.sent ? ((s.claimed / s.sent) * 100).toFixed(1) : "0.0";
+    console.log(`  ${v.padEnd(9)} sent ${String(s.sent).padStart(4)}   claimed ${String(s.claimed).padStart(3)}   (${rate}%)`);
+  }
 }
 
 export async function markFailed(id: string, error: string): Promise<void> {

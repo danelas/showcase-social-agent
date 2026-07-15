@@ -24,6 +24,7 @@ import {
   claimedProviderIds,
   markFollowedUp,
   markConverted,
+  abReport,
   prisma,
   type Sendable,
 } from "./db";
@@ -51,7 +52,27 @@ function firstName(p: Sendable): string {
   return head.charAt(0).toUpperCase() + head.slice(1).toLowerCase();
 }
 
-function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
+export type EmailVariant = "makeover" | "claim";
+
+// Sticky 50/50 first-touch A/B, derived from the prospect id so it's stable
+// across re-runs even before we persist it. Half get the makeover-led email,
+// half the classic "claim your profile" email — compare with --report.
+export function emailVariantFor(id: string): EmailVariant {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % 2 === 0 ? "makeover" : "claim";
+}
+
+function renderFirstTouch(
+  p: Sendable,
+  claimUrl: string,
+  variant: EmailVariant,
+): { subject: string; text: string; html: string } {
+  return variant === "makeover" ? renderMakeoverEmail(p, claimUrl) : renderClaimEmail(p, claimUrl);
+}
+
+// VARIANT A — lead with the free Video Makeover offer.
+function renderMakeoverEmail(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
   const first = firstName(p);
   const cat = p.categoryName.toLowerCase();
 
@@ -106,6 +127,45 @@ function renderEmail(p: Sendable, claimUrl: string): { subject: string; text: st
 <p style="color:#666;font-size:13px">or paste this link: <a href="${makeoverUrl}">${makeoverUrl}</a></p>
 <p style="color:#666;font-size:13px">I also reserved you a free ${BRAND} profile so ${p.city} clients can find you — <a href="${claimUrl}">claim it anytime</a>.</p>
 <p>Not interested? Reply "no thanks" and I won't reach out again.</p>
+<p>— Dan, ${BRAND}</p>
+</body></html>`;
+
+  return { subject, text, html };
+}
+
+// VARIANT B — the classic "I already built your profile, claim it" email.
+function renderClaimEmail(p: Sendable, claimUrl: string): { subject: string; text: string; html: string } {
+  const first = firstName(p);
+  const cat = p.categoryName.toLowerCase();
+
+  const subject = `I built you a ${BRAND} profile — ${p.city} clients are watching`;
+
+  const text = [
+    `Hey ${first},`,
+    ``,
+    `I run ${BRAND} — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).`,
+    ``,
+    `I already set up a profile for ${p.name} so you don't have to start from scratch. It's reserved for you and hidden until you claim it — takes about 2 minutes to make it live: just add a short intro video (or a few photos).`,
+    ``,
+    `Claim your profile here:`,
+    `${claimUrl}`,
+    ``,
+    `Listings are free. Clients book/message/call you directly — no lead fees, no middleman.`,
+    ``,
+    `Not interested? Reply "no thanks" and I'll delete the profile and won't reach out again.`,
+    ``,
+    `— Dan, ${BRAND}`,
+  ].join("\n");
+
+  const html = `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;color:#222;line-height:1.55;max-width:560px;margin:0 auto;padding:24px">
+<p>Hey ${first},</p>
+<p>I run <strong>${BRAND}</strong> — a video-first marketplace where ${p.city} clients scroll short clips from local ${cat} pros and book the one they like (think TikTok, but everyone on it is a bookable local provider).</p>
+<p>I already set up a profile for <strong>${p.name}</strong> so you don't have to start from scratch. It's reserved for you and hidden until you claim it — about 2 minutes to make it live: add a short intro video (or a few photos).</p>
+<p><a href="${claimUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Claim your profile</a></p>
+<p style="color:#666;font-size:13px">or paste this link: <a href="${claimUrl}">${claimUrl}</a></p>
+<p>Listings are free. Clients book/message/call you directly — no lead fees, no middleman.</p>
+<p>Not interested? Reply "no thanks" and I'll delete the profile and won't reach out again.</p>
 <p>— Dan, ${BRAND}</p>
 </body></html>`;
 
@@ -228,6 +288,11 @@ async function main() {
   const city = arg("city");
   const delayMs = Number(arg("delay") ?? "5000");
 
+  if (flag("report")) {
+    await abReport();
+    return;
+  }
+
   if (flag("followup")) {
     await runFollowup(live, max, delayMs);
     return;
@@ -254,8 +319,9 @@ async function main() {
 
     if (!live) {
       if (i < 5) {
-        const { subject, text } = renderEmail(p, `${APP_URL}/claim/<token>`);
-        console.log(`     subject: ${subject}`);
+        const variant = emailVariantFor(p.id);
+        const { subject, text } = renderFirstTouch(p, `${APP_URL}/claim/<token>`, variant);
+        console.log(`     [${variant}] subject: ${subject}`);
         console.log(`     ${text.split("\n").slice(0, 3).join(" ⏎ ").slice(0, 150)}…`);
       }
       continue;
@@ -270,11 +336,17 @@ async function main() {
         continue;
       }
       const claimUrl = `${APP_URL}/claim/${draft.claimToken}`;
-      const { subject, text, html } = renderEmail(p, claimUrl);
+      const variant = emailVariantFor(p.id);
+      const { subject, text, html } = renderFirstTouch(p, claimUrl, variant);
       const { id } = await sendViaResend({ to, subject, text, html });
-      await markSent(p.id, { providerId: draft.providerId, claimToken: draft.claimToken, resendId: id ?? null });
+      await markSent(p.id, {
+        providerId: draft.providerId,
+        claimToken: draft.claimToken,
+        resendId: id ?? null,
+        emailVariant: variant,
+      });
       sent++;
-      console.log(`     ✓ profile /p/${draft.slug} · sent (${id ?? "no id"})`);
+      console.log(`     ✓ [${variant}] profile /p/${draft.slug} · sent (${id ?? "no id"})`);
     } catch (e) {
       const error = (e as Error).message;
       try {
