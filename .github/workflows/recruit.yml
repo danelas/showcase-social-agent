@@ -45,6 +45,10 @@ jobs:
       RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
       RECRUIT_BRAND: ${{ secrets.RECRUIT_BRAND }}
+      # Safety switch for the makeover A/B arm. Set repo variable MAKEOVER_LIVE
+      # to "true" once the makeover pipeline is verified; until then the
+      # makeover-assigned half gets the classic claim email.
+      MAKEOVER_LIVE: ${{ vars.MAKEOVER_LIVE }}
 
     steps:
       - uses: actions/checkout@v4

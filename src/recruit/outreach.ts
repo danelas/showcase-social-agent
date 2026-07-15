@@ -41,6 +41,18 @@ function flag(name: string): boolean {
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const BRAND = process.env.RECRUIT_BRAND || "PeekScout";
 
+// Safety switch. Until the makeover pipeline is verified end-to-end on a real
+// clip, leave MAKEOVER_LIVE unset/false: makeover-assigned prospects then get
+// the classic claim email instead (and are recorded as "claim", so the A/B
+// report stays honest — nobody is counted in the makeover arm without seeing it).
+// Flip MAKEOVER_LIVE=true once a good render is confirmed to launch the arm.
+const MAKEOVER_LIVE = /^(1|true|yes|on)$/i.test(process.env.MAKEOVER_LIVE || "");
+
+// Downgrade the makeover arm to claim while the switch is off.
+function effectiveVariant(assigned: EmailVariant): EmailVariant {
+  return assigned === "makeover" && !MAKEOVER_LIVE ? "claim" : assigned;
+}
+
 function firstName(p: Sendable): string {
   const local = p.primaryEmail?.split("@")[0] ?? "";
   if (!local) return "there";
@@ -206,7 +218,10 @@ async function sendViaResend(opts: { to: string; subject: string; text: string; 
 // Resolve which A/B arm a prospect is in — prefer the stored variant, fall back
 // to the deterministic assignment (covers rows sent before the column existed).
 function resolveVariant(stored: string | null, id: string): EmailVariant {
-  return stored === "makeover" ? "makeover" : stored === "claim" ? "claim" : emailVariantFor(id);
+  // Honor what they actually received on the first touch; only apply the switch
+  // to the fallback (pre-A/B rows with no stored variant).
+  if (stored === "makeover" || stored === "claim") return stored;
+  return effectiveVariant(emailVariantFor(id));
 }
 
 // Second-touch nudge, matched to the prospect's first-touch A/B variant so the
@@ -356,7 +371,10 @@ async function main() {
   const batch = await getSendable({ limit: max, categoryName, city });
 
   console.log(`[outreach] ${batch.length} eligible prospects (cap ${max})`);
-  console.log(`[outreach] mode: ${live ? "LIVE — creating profiles + sending" : "DRY-RUN (no profiles created)"}\n`);
+  console.log(`[outreach] mode: ${live ? "LIVE — creating profiles + sending" : "DRY-RUN (no profiles created)"}`);
+  console.log(
+    `[outreach] makeover arm: ${MAKEOVER_LIVE ? "ON" : "OFF (makeover picks get the claim email)"}\n`,
+  );
 
   if (batch.length === 0) {
     console.log("Nothing to send. Run discover.ts to find more.");
@@ -374,7 +392,7 @@ async function main() {
 
     if (!live) {
       if (i < 5) {
-        const variant = emailVariantFor(p.id);
+        const variant = effectiveVariant(emailVariantFor(p.id));
         const { subject, text } = renderFirstTouch(p, `${APP_URL}/claim/<token>`, variant);
         console.log(`     [${variant}] subject: ${subject}`);
         console.log(`     ${text.split("\n").slice(0, 3).join(" ⏎ ").slice(0, 150)}…`);
@@ -391,7 +409,7 @@ async function main() {
         continue;
       }
       const claimUrl = `${APP_URL}/claim/${draft.claimToken}`;
-      const variant = emailVariantFor(p.id);
+      const variant = effectiveVariant(emailVariantFor(p.id));
       const { subject, text, html } = renderFirstTouch(p, claimUrl, variant);
       const { id } = await sendViaResend({ to, subject, text, html });
       await markSent(p.id, {
