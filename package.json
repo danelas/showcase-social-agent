@@ -10,6 +10,7 @@
     "recruit:discover": "tsx src/recruit/discover.ts",
     "recruit:send": "tsx src/recruit/outreach.ts",
     "recruit:followup": "tsx src/recruit/outreach.ts --followup",
+    "makeover:run": "tsx src/makeover/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
