@@ -9,6 +9,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Brand, Brief, DIMS, type CompiledAd } from "./types.ts";
 import { downloadClip, generateClip } from "./veo.ts";
+import { writeCreative } from "./autoprompt.ts";
 
 // Load .env if present (Node >= 20.6).
 try {
@@ -18,7 +19,8 @@ try {
 }
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const MOCK = process.env.MOCK === "1";
+const PROMPT_ONLY = process.env.AUTOPROMPT_ONLY === "1";
+const MOCK = process.env.MOCK === "1" || PROMPT_ONLY;
 
 async function main() {
   const briefPath = process.argv[2];
@@ -60,6 +62,32 @@ async function main() {
     const durationInFrames = Math.round(s.seconds * brief.fps);
     let clip: string | null = null;
 
+    // Resolve the creative: hand-written, or auto-written by the LLM.
+    let veoPrompt = s.prompt ?? "";
+    let captions = s.captions;
+    let cta = s.cta;
+    if (s.auto) {
+      console.log(`\n[scene ${i + 1}] auto-writing creative (${s.auto.category})…`);
+      const creative = await writeCreative({
+        brandName: brand.name,
+        tagline: brand.tagline,
+        category: s.auto.category,
+        vibe: s.auto.vibe,
+        offer: s.auto.offer,
+        aspect: brief.aspect,
+        seconds: s.seconds,
+      });
+      veoPrompt = creative.veoPrompt;
+      if (captions.length === 0) captions = creative.captions;
+      if (!cta) cta = creative.cta;
+      console.log(`  VEO PROMPT: ${veoPrompt}`);
+      console.log(`  CAPTIONS:   ${captions.map((c) => c.text).join("  |  ")}`);
+      console.log(`  CTA:        ${cta}`);
+    }
+    if (!veoPrompt) {
+      throw new Error(`Scene ${i + 1} has no prompt and no auto block.`);
+    }
+
     if (!MOCK) {
       const target = join(clipsDir, `${base}-s${i}-${stamp}.mp4`);
       console.log(`\n[scene ${i + 1}] ${s.source.type}`);
@@ -68,14 +96,14 @@ async function main() {
         s.source.type === "image2video"
           ? {
               kind: "image2video",
-              prompt: s.prompt,
+              prompt: veoPrompt,
               aspect: brief.aspect,
               seconds: s.seconds,
               imagePath: resolveAsset(assetsRoot, s.source.image),
             }
           : {
               kind: "text2video",
-              prompt: s.prompt,
+              prompt: veoPrompt,
               aspect: brief.aspect,
               seconds: s.seconds,
             },
@@ -86,7 +114,11 @@ async function main() {
       clip = `clips/${basename(target)}`;
       console.log(`  saved ${clip}`);
     } else {
-      console.log(`\n[scene ${i + 1}] ${s.source.type} — skipped (mock)`);
+      console.log(
+        `\n[scene ${i + 1}] ${s.source.type} — ${
+          PROMPT_ONLY ? "prompt-only (no Veo)" : "skipped (mock)"
+        }`
+      );
     }
 
     // Copy each card screenshot into public/cards so Remotion can staticFile it.
@@ -102,10 +134,10 @@ async function main() {
       clip,
       durationInFrames,
       cards,
-      captions: s.captions,
+      captions,
       headline: s.headline,
       subhead: s.subhead,
-      cta: s.cta,
+      cta,
       bubbles: s.bubbles,
     });
   }

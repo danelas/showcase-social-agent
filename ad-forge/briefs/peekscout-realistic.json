@@ -1,0 +1,17 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "text2video" },
+      "auto": {
+        "category": "med spa & facials",
+        "vibe": "realistic premium commercial, warm, aspirational, cinematic",
+        "offer": "PeekScout lets you watch real treatment videos from local med spas, then book instantly"
+      },
+      "seconds": 8,
+      "cards": []
+    }
+  ]
+}

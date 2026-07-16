@@ -52,11 +52,21 @@ export const Caption = z.object({
   at: z.number().optional(),
 });
 
+/** Auto-write the Veo prompt + captions with an LLM instead of hand-writing. */
+export const Auto = z.object({
+  category: z.string(),
+  vibe: z.string().default("realistic premium commercial"),
+  offer: z.string().default(""),
+});
+
 /** One scene = one Veo clip + its overlays. */
 export const Scene = z.object({
   source: Source,
-  /** The Veo prompt describing the FOOTAGE (camera, mood, action) — not text. */
-  prompt: z.string(),
+  /** The Veo prompt describing the FOOTAGE (camera, mood, action) — not text.
+   *  Optional when `auto` is set (the LLM writes it). */
+  prompt: z.string().optional(),
+  /** If set, an LLM auto-writes prompt/captions/cta from category + vibe. */
+  auto: Auto.optional(),
   /** Seconds of footage to request (Veo 3 currently fixes this near 8). */
   seconds: z.number().min(2).max(8).default(8),
   /** Screenshots (filenames in the brand's assetsDir) shown as floating phone cards. */
