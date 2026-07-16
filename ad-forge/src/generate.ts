@@ -56,6 +56,7 @@ async function main() {
   );
 
   const scenes: CompiledAd["scenes"] = [];
+  let postCaption = "";
 
   for (let i = 0; i < brief.scenes.length; i++) {
     const s = brief.scenes[i];
@@ -80,6 +81,7 @@ async function main() {
       veoPrompt = creative.veoPrompt;
       if (captions.length === 0) captions = creative.captions;
       if (!cta) cta = creative.cta;
+      if (!postCaption && creative.postCaption) postCaption = creative.postCaption;
       console.log(`  VEO PROMPT: ${veoPrompt}`);
       console.log(`  CAPTIONS:   ${captions.map((c) => c.text).join("  |  ")}`);
       console.log(`  CTA:        ${cta}`);
@@ -154,6 +156,12 @@ async function main() {
       tagline: brand.tagline,
       logo: brand.logo ?? null,
       fontFamily: brand.fontFamily,
+    },
+    post: {
+      caption:
+        postCaption ||
+        `${brand.name}${brand.tagline ? ` — ${brand.tagline}` : ""}`,
+      title: brand.tagline ? `${brand.name} — ${brand.tagline}` : brand.name,
     },
     scenes,
   };

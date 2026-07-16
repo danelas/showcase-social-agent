@@ -21,6 +21,7 @@ export type Creative = {
   veoPrompt: string;
   captions: { text: string; accent: boolean }[];
   cta: string;
+  postCaption: string;
 };
 
 export type AutoInput = {
@@ -47,7 +48,8 @@ Return ONLY a JSON object (no markdown, no code fence) with exactly these keys:
 {
   "veoPrompt": string,   // the Veo text-to-video prompt
   "captions": [ { "text": string, "accent": boolean }, ... ],  // exactly 3
-  "cta": string          // 2-4 words, e.g. "Get ${input.brandName}"
+  "cta": string,         // 2-4 words, e.g. "Get ${input.brandName}"
+  "postCaption": string  // social caption for the POST (see rules)
 }
 
 Rules for "veoPrompt":
@@ -60,7 +62,11 @@ Rules for "veoPrompt":
 Rules for "captions":
 - 3 short punchy lines, 2-4 words each, matching the "${vibe}" energy.
 - Exactly ONE caption has "accent": true (the key line); the others false.
-- No hashtags, no emojis.`;
+- No hashtags, no emojis.
+
+Rules for "postCaption":
+- 1-2 upbeat sentences for the social post that sell ${input.brandName} and the offer.
+- End with 3-5 relevant lowercase hashtags. At most one emoji. No @mentions.`;
 
   const ai = client();
   const res: any = await ai.models.generateContent({
@@ -89,5 +95,6 @@ Rules for "captions":
     veoPrompt: String(parsed.veoPrompt ?? "").trim(),
     captions,
     cta: String(parsed.cta ?? `Get ${input.brandName}`).trim(),
+    postCaption: String(parsed.postCaption ?? "").trim(),
   };
 }

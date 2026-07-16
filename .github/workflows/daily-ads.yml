@@ -109,3 +109,17 @@ jobs:
           path: ad-forge/out/${{ steps.pick.outputs.base }}.mp4
           if-no-files-found: error
           retention-days: 14
+
+      # Auto-post to social via upload-post — OFF unless you opt in.
+      # Enable by setting repo Variable  ADFORGE_POST = 1  and
+      #   ADFORGE_PLATFORMS = tiktok,instagram   (comma-separated),
+      # plus secrets UPLOAD_POST_API_KEY, UPLOAD_POST_USER (the PeekScout
+      # profile name), and FACEBOOK_PAGE_ID if posting to Facebook.
+      - name: Auto-post to social
+        if: ${{ env.MOCK == '0' && vars.ADFORGE_POST == '1' }}
+        env:
+          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
+          UPLOAD_POST_USER: ${{ secrets.UPLOAD_POST_USER }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          ADFORGE_PLATFORMS: ${{ vars.ADFORGE_PLATFORMS }}
+        run: npx tsx src/postad.ts "out/${{ steps.pick.outputs.base }}.mp4" "out/${{ steps.pick.outputs.base }}.props.json"

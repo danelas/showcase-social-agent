@@ -120,6 +120,10 @@ export const CompiledAd = z.object({
     logo: z.string().nullable(),
     fontFamily: z.string(),
   }),
+  /** Caption + title used when auto-posting the finished video. */
+  post: z
+    .object({ caption: z.string().default(""), title: z.string().default("") })
+    .default({ caption: "", title: "" }),
   scenes: z.array(CompiledScene),
 });
 export type CompiledAd = z.infer<typeof CompiledAd>;
