@@ -8,13 +8,13 @@
         "type": "text2video"
       },
       "auto": {
-        "category": "Med Spa & Aesthetics",
+        "category": "Real Estate",
         "vibe": "realistic premium commercial, warm, aspirational, cinematic",
-        "offer": "PeekScout lets you watch real med spa & aesthetics videos from local pros, then book instantly"
+        "offer": "PeekScout lets you watch real real estate videos from local pros, then book instantly"
       },
       "seconds": 8,
       "cards": [
-        "medspa.png"
+        "realestate.png"
       ],
       "cardReveal": true
     }

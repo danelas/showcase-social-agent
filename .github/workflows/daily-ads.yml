@@ -38,6 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       briefs: ${{ steps.set.outputs.briefs }}
+    env:
+      # How many category videos to build per day. All 16 categories rotate
+      # through over time. Raise to 16 to do every category every day.
+      ADFORGE_DAILY_COUNT: ${{ vars.ADFORGE_DAILY_COUNT || '4' }}
     steps:
       - uses: actions/checkout@v4
       - id: set
@@ -46,10 +50,20 @@ jobs:
           if [ -n "$forced" ]; then
             briefs=$(printf '%s' "$forced" | jq -R -s -c 'split("\n") | map(select(length>0))')
           else
-            briefs=$(ls ad-forge/briefs/daily/*.json | xargs -n1 basename | jq -R . | jq -s -c '.')
+            mapfile -t all < <(ls ad-forge/briefs/daily/*.json | xargs -n1 basename | sort)
+            n=${#all[@]}
+            count=${ADFORGE_DAILY_COUNT:-4}
+            [ "$count" -gt "$n" ] && count=$n
+            day=$(( $(date -u +%s) / 86400 ))
+            sel=()
+            for ((i=0; i<count; i++)); do
+              idx=$(( (day*count + i) % n ))
+              sel+=("${all[$idx]}")
+            done
+            briefs=$(printf '%s\n' "${sel[@]}" | jq -R . | jq -s -c '.')
           fi
           echo "briefs=$briefs" >> "$GITHUB_OUTPUT"
-          echo "Building: $briefs"
+          echo "Building ($ADFORGE_DAILY_COUNT/day of $(ls ad-forge/briefs/daily/*.json | wc -l)): $briefs"
 
   make-ad:
     needs: plan

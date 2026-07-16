@@ -8,15 +8,13 @@
         "type": "text2video"
       },
       "auto": {
-        "category": "Med Spa & Aesthetics",
+        "category": "Interior Design & Staging",
         "vibe": "realistic premium commercial, warm, aspirational, cinematic",
-        "offer": "PeekScout lets you watch real med spa & aesthetics videos from local pros, then book instantly"
+        "offer": "PeekScout lets you watch real interior design & staging videos from local pros, then book instantly"
       },
       "seconds": 8,
-      "cards": [
-        "medspa.png"
-      ],
-      "cardReveal": true
+      "cards": [],
+      "cardReveal": false
     }
   ]
 }
