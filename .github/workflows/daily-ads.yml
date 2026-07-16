@@ -1,20 +1,19 @@
 name: Daily Ads (ad-forge)
 
-# Generates one PeekScout video ad per day by rotating through ad-forge/briefs,
-# then uploads the .mp4 as a downloadable artifact for you to review before posting.
+# Generates PeekScout video ads each day — one per brief in ad-forge/briefs/daily
+# (med spa, pet grooming, real estate = 3/day) — uploads each .mp4 as a review
+# artifact and optionally auto-posts to social.
 #
-# SAFE BY DEFAULT: runs in free MOCK mode (no Veo spend) until you opt in.
-# To generate REAL footage, add a repo variable  ADFORGE_REAL = 1
-#   (Settings -> Secrets and variables -> Actions -> Variables).
-# The Veo key must be a repo secret named  GEMINI_API_KEY.
+# SAFE BY DEFAULT: free MOCK mode (no Veo spend) until repo var ADFORGE_REAL=1.
+# Veo key = repo secret GEMINI_API_KEY.
 on:
   schedule:
-    # 13:10 UTC daily (~9am ET). Adjust as you like.
+    # 13:10 UTC daily (~9am ET).
     - cron: "10 13 * * *"
   workflow_dispatch:
     inputs:
       brief:
-        description: "Brief filename to force (blank = auto-rotate by day)"
+        description: "Single brief filename to force (blank = all daily briefs)"
         required: false
         default: ""
         type: string
@@ -24,7 +23,7 @@ on:
         default: false
         type: boolean
       model:
-        description: "Veo model override (blank = default fast)"
+        description: "Veo model override (blank = default)"
         required: false
         default: ""
         type: string
@@ -34,9 +33,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Decide which briefs to build: the one forced via dispatch, or all daily briefs.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      briefs: ${{ steps.set.outputs.briefs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          forced="${{ github.event.inputs.brief }}"
+          if [ -n "$forced" ]; then
+            briefs=$(printf '%s' "$forced" | jq -R -s -c 'split("\n") | map(select(length>0))')
+          else
+            briefs=$(ls ad-forge/briefs/daily/*.json | xargs -n1 basename | jq -R . | jq -s -c '.')
+          fi
+          echo "briefs=$briefs" >> "$GITHUB_OUTPUT"
+          echo "Building: $briefs"
+
   make-ad:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        brief: ${{ fromJSON(needs.plan.outputs.briefs) }}
     defaults:
       run:
         working-directory: ad-forge
@@ -67,26 +89,18 @@ jobs:
       - name: Install deps
         run: npm install --no-audit --no-fund
 
-      - name: Pick today's brief
+      - name: Resolve brief
         id: pick
         run: |
-          forced="${{ github.event.inputs.brief }}"
-          if [ -n "$forced" ]; then
-            # Accept a bare name (search daily/ then briefs/) or an explicit path.
-            if [ -f "$forced" ]; then brief="$forced";
-            elif [ -f "briefs/daily/$forced" ]; then brief="briefs/daily/$forced";
-            else brief="briefs/$forced"; fi
-          else
-            mapfile -t briefs < <(ls briefs/daily/*.json | sort)
-            n=${#briefs[@]}
-            idx=$(( $(date -u +%s) / 86400 % n ))
-            brief="${briefs[$idx]}"
-          fi
+          b="${{ matrix.brief }}"
+          if [ -f "$b" ]; then brief="$b";
+          elif [ -f "briefs/daily/$b" ]; then brief="briefs/daily/$b";
+          else brief="briefs/$b"; fi
           base="$(basename "$brief" .json)"
           echo "brief=$brief" >> "$GITHUB_OUTPUT"
           echo "base=$base"   >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-          echo "Selected: $brief  (MOCK=$MOCK)"
+          echo "Building: $brief  (MOCK=$MOCK)"
 
       - name: Guard — real runs need a key
         if: ${{ env.MOCK == '0' }}
@@ -111,10 +125,9 @@ jobs:
           retention-days: 14
 
       # Auto-post to social via upload-post — OFF unless you opt in.
-      # Enable by setting repo Variable  ADFORGE_POST = 1  and
-      #   ADFORGE_PLATFORMS = tiktok,instagram   (comma-separated),
-      # plus secrets UPLOAD_POST_API_KEY, UPLOAD_POST_USER (the PeekScout
-      # profile name), and FACEBOOK_PAGE_ID if posting to Facebook.
+      # Enable: repo Variable ADFORGE_POST=1 and ADFORGE_PLATFORMS=tiktok,instagram,
+      # plus secrets UPLOAD_POST_API_KEY, UPLOAD_POST_USER (PeekScout profile), and
+      # FACEBOOK_PAGE_ID if posting to Facebook.
       - name: Auto-post to social
         if: ${{ env.MOCK == '0' && vars.ADFORGE_POST == '1' }}
         env:
