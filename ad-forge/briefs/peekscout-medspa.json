@@ -1,0 +1,15 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "image2video", "image": "medspa.png" },
+      "prompt": "Cinematic slow push-in on a phone showing a med-spa facial treatment video. Soft studio lighting, gentle steam, calm premium mood, shallow depth of field. Smooth subtle camera motion. No on-screen text, no captions, no watermarks.",
+      "seconds": 8,
+      "headline": "See it before\nyou book it.",
+      "subhead": "Watch real med-spa videos, then book in a tap.",
+      "cta": "Get PeekScout"
+    }
+  ]
+}

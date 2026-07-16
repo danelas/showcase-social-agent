@@ -1,0 +1,15 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "image2video", "image": "realestate.png" },
+      "prompt": "Cinematic slow push-in on a phone showing a real-estate agent giving a home video tour. Bright natural daylight, welcoming and professional, shallow depth of field. Smooth subtle camera motion. No on-screen text, no captions, no watermarks.",
+      "seconds": 8,
+      "headline": "Tour it first.\nThen book.",
+      "subhead": "Real video tours from local agents near you.",
+      "cta": "Get PeekScout"
+    }
+  ]
+}

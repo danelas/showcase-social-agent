@@ -1,0 +1,9 @@
+{
+  "name": "PeekScout",
+  "accent": "#7c3aed",
+  "ink": "#141414",
+  "tagline": "See it before you book it.",
+  "logo": "brands/peekscout/logo.png",
+  "assetsDir": "assets/peekscout",
+  "fontFamily": "Segoe UI, Arial, Helvetica, sans-serif"
+}

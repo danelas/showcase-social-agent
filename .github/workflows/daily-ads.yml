@@ -1,0 +1,103 @@
+name: Daily Ads (ad-forge)
+
+# Generates one PeekScout video ad per day by rotating through ad-forge/briefs,
+# then uploads the .mp4 as a downloadable artifact for you to review before posting.
+#
+# SAFE BY DEFAULT: runs in free MOCK mode (no Veo spend) until you opt in.
+# To generate REAL footage, add a repo variable  ADFORGE_REAL = 1
+#   (Settings -> Secrets and variables -> Actions -> Variables).
+# The Veo key must be a repo secret named  GEMINI_API_KEY.
+on:
+  schedule:
+    # 13:10 UTC daily (~9am ET). Adjust as you like.
+    - cron: "10 13 * * *"
+  workflow_dispatch:
+    inputs:
+      brief:
+        description: "Brief filename to force (blank = auto-rotate by day)"
+        required: false
+        default: ""
+        type: string
+      real:
+        description: "Spend Veo credits for real footage?"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: daily-ads
+  cancel-in-progress: false
+
+jobs:
+  make-ad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ad-forge
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      VEO_MODEL: ${{ vars.VEO_MODEL || 'veo-3.0-generate-001' }}
+      # MOCK unless real footage is explicitly requested (input or repo var).
+      MOCK: ${{ (github.event.inputs.real == 'true' || vars.ADFORGE_REAL == '1') && '0' || '1' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Headless-Chrome + font libs Remotion needs on Linux runners.
+      - name: System deps for Remotion
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2t64 \
+            libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 \
+            libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 \
+            fonts-liberation fonts-dejavu-core || true
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Pick today's brief
+        id: pick
+        run: |
+          forced="${{ github.event.inputs.brief }}"
+          if [ -n "$forced" ]; then
+            brief="briefs/$forced"
+          else
+            mapfile -t briefs < <(ls briefs/*.json | sort)
+            n=${#briefs[@]}
+            idx=$(( $(date -u +%s) / 86400 % n ))
+            brief="${briefs[$idx]}"
+          fi
+          base="$(basename "$brief" .json)"
+          echo "brief=$brief" >> "$GITHUB_OUTPUT"
+          echo "base=$base"   >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "Selected: $brief  (MOCK=$MOCK)"
+
+      - name: Guard — real runs need a key
+        if: ${{ env.MOCK == '0' }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::ADFORGE_REAL is on but GEMINI_API_KEY secret is missing."
+            exit 1
+          fi
+
+      - name: Generate footage (Veo, or mock)
+        run: npx tsx src/generate.ts "${{ steps.pick.outputs.brief }}"
+
+      - name: Compose final video
+        run: npx tsx src/compose.ts "out/${{ steps.pick.outputs.base }}.props.json" "out/${{ steps.pick.outputs.base }}.mp4"
+
+      - name: Upload ad for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ad-${{ steps.pick.outputs.date }}-${{ steps.pick.outputs.base }}
+          path: ad-forge/out/${{ steps.pick.outputs.base }}.mp4
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,26 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "image2video", "image": "Screenshot 2026-07-16 030720.png" },
+      "prompt": "Cinematic slow push-in on a phone showing a med-spa facial video feed. Gentle, smooth camera motion, soft studio lighting, shallow depth of field. Premium and calm. No on-screen text, no captions, no watermarks.",
+      "seconds": 8,
+      "headline": "From Scroll to Booked",
+      "subhead": "The video-first way to book local pros.",
+      "bubbles": [
+        { "side": "in", "text": "Loved your facial video — Saturday open?" },
+        { "side": "out", "text": "Yes! Booked you in for 10am ✨" }
+      ]
+    },
+    {
+      "source": { "type": "text2video" },
+      "prompt": "Fast, upbeat montage feel: a person's thumb scrolling a vertical video feed of local service businesses, then tapping a purple Book button. Modern, bright, energetic. Vertical 9:16. No readable text on screen.",
+      "seconds": 8,
+      "headline": "Watch. Tap. Booked.",
+      "subhead": "Real videos from real local pros near you.",
+      "cta": "Get PeekScout"
+    }
+  ]
+}
