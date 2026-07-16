@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 import type { Aspect } from "./types.ts";
 
-const MODEL = process.env.VEO_MODEL || "veo-3.0-generate-001";
+// Read lazily: .env is loaded by the entrypoint AFTER this module is imported.
+const model = () => process.env.VEO_MODEL || "veo-3.1-fast-generate-preview";
 
 let _ai: GoogleGenAI | null = null;
 /** Construct the client lazily so MOCK mode never needs a key. */
@@ -53,7 +54,7 @@ export async function generateClip(
     durationSeconds: job.seconds,
   };
 
-  const req: Record<string, unknown> = { model: MODEL, prompt: job.prompt, config };
+  const req: Record<string, unknown> = { model: model(), prompt: job.prompt, config };
 
   if (job.kind === "image2video") {
     const bytes = readFileSync(job.imagePath);
@@ -63,7 +64,7 @@ export async function generateClip(
     };
   }
 
-  onTick?.(`submitting ${job.kind} to ${MODEL} (${job.aspect}, ${job.seconds}s)`);
+  onTick?.(`submitting ${job.kind} to ${model()} (${job.aspect}, ${job.seconds}s)`);
   // @ts-expect-error SDK types vary across versions; the runtime shape is stable.
   let op = await ai.models.generateVideos(req);
 

@@ -62,7 +62,7 @@ run("npx", [
   "--sequence",
   "--image-format=jpeg",
   "--jpeg-quality=95",
-  "--concurrency=2",
+  "--concurrency=1",
   `--props=${JSON.stringify(propsPath)}`,
 ]);
 
