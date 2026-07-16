@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      model:
+        description: "Veo model override (blank = default fast)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: daily-ads
@@ -37,7 +42,7 @@ jobs:
         working-directory: ad-forge
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      VEO_MODEL: ${{ vars.VEO_MODEL || 'veo-3.1-fast-generate-preview' }}
+      VEO_MODEL: ${{ github.event.inputs.model || vars.VEO_MODEL || 'veo-3.1-fast-generate-preview' }}
       # MOCK unless real footage is explicitly requested (input or repo var).
       MOCK: ${{ (github.event.inputs.real == 'true' || vars.ADFORGE_REAL == '1') && '0' || '1' }}
 
