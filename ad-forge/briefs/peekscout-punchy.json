@@ -1,0 +1,19 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "text2video" },
+      "prompt": "Fast, punchy, high-energy TikTok-style beauty b-roll: extreme close-up of glowing dewy skin catching soft light, slow-motion droplet, a swirl of soft steam, dynamic snappy camera push-ins and whip motion, luxe med-spa ambiance, bokeh highlights, cinematic color grade. Vertical 9:16. No people talking, no on-screen text, no UI, no watermarks.",
+      "seconds": 8,
+      "cards": ["medspa.png"],
+      "captions": [
+        { "text": "Booking blind?", "accent": false },
+        { "text": "See it first.", "accent": true },
+        { "text": "Then book.", "accent": false }
+      ],
+      "cta": "Get PeekScout"
+    }
+  ]
+}

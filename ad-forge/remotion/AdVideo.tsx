@@ -11,9 +11,12 @@ import {
 } from "remotion";
 
 export type Bubble = { side: "in" | "out"; text: string };
+export type Caption = { text: string; accent?: boolean; at?: number };
 export type Scene = {
   clip: string | null;
   durationInFrames: number;
+  cards: string[];
+  captions: Caption[];
   headline?: string;
   subhead?: string;
   cta?: string;
@@ -54,40 +57,46 @@ const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
   brand,
 }) => {
   const { width } = useVideoConfig();
-  const u = width / 1080; // scale unit so both 9:16 and 16:9 look right
+  const u = width / 1080;
 
   return (
     <AbsoluteFill>
-      {scene.clip ? (
-        <OffthreadVideo
-          src={staticFile(scene.clip)}
-          muted
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      ) : (
-        <AbsoluteFill
-          style={{
-            background: `linear-gradient(135deg, ${brand.accent} 0%, #101014 70%)`,
-          }}
-        />
-      )}
+      <KenBurns>
+        {scene.clip ? (
+          <OffthreadVideo
+            src={staticFile(scene.clip)}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <AbsoluteFill
+            style={{
+              background: `linear-gradient(135deg, ${brand.accent} 0%, #101014 70%)`,
+            }}
+          />
+        )}
+      </KenBurns>
 
       {/* readability scrim */}
       <AbsoluteFill
         style={{
           background:
-            "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.72) 100%)",
+            "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.78) 100%)",
         }}
       />
 
-      {scene.headline && (
-        <Headline
-          u={u}
-          headline={scene.headline}
-          subhead={scene.subhead}
-        />
+      {scene.cards.map((c, i) => (
+        <PhoneCard key={i} src={c} index={i} count={scene.cards.length} u={u} />
+      ))}
+
+      {scene.captions.length > 0 && (
+        <Captions captions={scene.captions} accent={brand.accent} u={u} />
       )}
 
+      {/* legacy static overlays still supported */}
+      {scene.headline && (
+        <Headline u={u} headline={scene.headline} subhead={scene.subhead} />
+      )}
       {scene.bubbles.map((b, i) => (
         <ChatBubble
           key={i}
@@ -100,7 +109,154 @@ const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
       ))}
 
       {scene.cta && <CTA u={u} label={scene.cta} accent={brand.accent} />}
+
+      <CutFlash />
     </AbsoluteFill>
+  );
+};
+
+/** Slow zoom on the background for constant energy. */
+const KenBurns: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const scale = interpolate(frame, [0, durationInFrames], [1.06, 1.16]);
+  return (
+    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "50% 45%" }}>
+      {children}
+    </AbsoluteFill>
+  );
+};
+
+/** White flash on the first frames of a scene = punchy cut. */
+const CutFlash: React.FC = () => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, 5], [0.6, 0], { extrapolateRight: "clamp" });
+  return <AbsoluteFill style={{ background: "#fff", opacity }} />;
+};
+
+/** A screenshot floating in a phone frame — slides in, tilts, bobs. */
+const PhoneCard: React.FC<{
+  src: string;
+  index: number;
+  count: number;
+  u: number;
+}> = ({ src, index, count, u }) => {
+  const frame = useCurrentFrame();
+  const { fps, width } = useVideoConfig();
+  const delay = 6 + index * 10;
+  const s = spring({ frame: frame - delay, fps, config: { damping: 15, mass: 0.7 } });
+
+  const cardW = width * (count > 1 ? 0.46 : 0.58);
+  // Fan multiple cards out horizontally.
+  const spread = count > 1 ? (index - (count - 1) / 2) * cardW * 0.62 : 0;
+  const baseTilt = count > 1 ? (index - (count - 1) / 2) * 8 : -4;
+
+  const enterY = interpolate(s, [0, 1], [520 * u, 0]);
+  const bob = Math.sin((frame - delay) / 26) * 10 * u;
+  const tilt = baseTilt + Math.sin((frame - delay) / 34) * 1.4;
+  const opacity = interpolate(frame, [delay, delay + 8], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width: cardW,
+        transform: `translate(-50%,-50%) translateX(${spread}px) translateY(${
+          enterY + bob + 40 * u
+        }px) rotate(${tilt}deg) scale(${interpolate(s, [0, 1], [0.9, 1])})`,
+        opacity,
+        zIndex: 3 + index,
+      }}
+    >
+      <div
+        style={{
+          background: "#0b0b0d",
+          padding: 10 * u,
+          borderRadius: 46 * u,
+          boxShadow: `0 ${34 * u}px ${70 * u}px rgba(0,0,0,0.55)`,
+          border: `${2 * u}px solid rgba(255,255,255,0.14)`,
+        }}
+      >
+        <Img
+          src={staticFile(src)}
+          style={{
+            display: "block",
+            width: "100%",
+            borderRadius: 36 * u,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Kinetic captions: each pops in for its slice of the scene. */
+const Captions: React.FC<{ captions: Caption[]; accent: string; u: number }> = ({
+  captions,
+  accent,
+  u,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  const tail = 42; // leave room for the CTA at the end
+  const usable = Math.max(30, durationInFrames - tail);
+  const slot = usable / captions.length;
+
+  return (
+    <>
+      {captions.map((c, i) => {
+        const start = c.at != null ? c.at * fps : i * slot;
+        const end = c.at != null ? start + slot : (i + 1) * slot;
+        const local = frame - start;
+        if (frame < start - 2 || frame > end + 2) return null;
+
+        const pop = spring({ frame: local, fps, config: { damping: 12, mass: 0.5 } });
+        const scale = interpolate(pop, [0, 1], [0.5, 1]);
+        const rot = interpolate(pop, [0, 1], [-4, 0]);
+        const opacity = interpolate(
+          frame,
+          [start, start + 5, end - 5, end],
+          [0, 1, 1, 0],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+        );
+
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              top: 210 * u,
+              left: 50 * u,
+              right: 50 * u,
+              textAlign: "center",
+              transform: `scale(${scale}) rotate(${rot}deg)`,
+              opacity,
+            }}
+          >
+            <span
+              style={{
+                display: "inline",
+                fontWeight: 900,
+                fontSize: 96 * u,
+                lineHeight: 1.0,
+                letterSpacing: -2 * u,
+                textTransform: "uppercase",
+                color: c.accent ? accent : "#fff",
+                WebkitTextStroke: c.accent ? `${2 * u}px rgba(0,0,0,0.25)` : undefined,
+                textShadow: `0 ${4 * u}px ${20 * u}px rgba(0,0,0,0.6)`,
+              }}
+            >
+              {c.text}
+            </span>
+          </div>
+        );
+      })}
+    </>
   );
 };
 
@@ -114,7 +270,6 @@ const Headline: React.FC<{ u: number; headline: string; subhead?: string }> = ({
   const s = spring({ frame, fps, config: { damping: 200 } });
   const y = interpolate(s, [0, 1], [40 * u, 0]);
   const opacity = interpolate(frame, [0, 12], [0, 1], { extrapolateRight: "clamp" });
-
   return (
     <div
       style={{
@@ -174,14 +329,12 @@ const ChatBubble: React.FC<{
     extrapolateRight: "clamp",
   });
   const out = bubble.side === "out";
-
   return (
     <div
       style={{
         position: "absolute",
         left: out ? undefined : 48 * u,
         right: out ? 48 * u : undefined,
-        // Stack earliest message highest so the thread reads top-to-bottom.
         bottom: (340 + (count - 1 - index) * 210) * u,
         maxWidth: 620 * u,
         transform: `scale(${scale})`,
@@ -223,7 +376,6 @@ const CTA: React.FC<{ u: number; label: string; accent: string }> = ({
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-
   return (
     <div
       style={{

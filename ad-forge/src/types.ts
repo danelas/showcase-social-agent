@@ -43,13 +43,27 @@ export const Bubble = z.object({
   text: z.string(),
 });
 
+/** A punchy kinetic caption that pops in over the footage. */
+export const Caption = z.object({
+  text: z.string(),
+  /** Render in the brand accent color (for the key word/line). */
+  accent: z.boolean().default(false),
+  /** Optional explicit start time (seconds). Omitted = auto-sequenced. */
+  at: z.number().optional(),
+});
+
 /** One scene = one Veo clip + its overlays. */
 export const Scene = z.object({
   source: Source,
-  /** The Veo prompt describing the motion/scene. Keep it about the FOOTAGE, not text. */
+  /** The Veo prompt describing the FOOTAGE (camera, mood, action) — not text. */
   prompt: z.string(),
   /** Seconds of footage to request (Veo 3 currently fixes this near 8). */
   seconds: z.number().min(2).max(8).default(8),
+  /** Screenshots (filenames in the brand's assetsDir) shown as floating phone cards. */
+  cards: z.array(z.string()).default([]),
+  /** Kinetic captions that pop in sequence over the footage. */
+  captions: z.array(Caption).default([]),
+  /** Legacy static overlays (still supported). */
   headline: z.string().optional(),
   subhead: z.string().optional(),
   cta: z.string().optional(),
@@ -70,6 +84,9 @@ export const CompiledScene = z.object({
   /** Path to the clip relative to public/, or null for a gradient fallback. */
   clip: z.string().nullable(),
   durationInFrames: z.number(),
+  /** Card image paths relative to public/. */
+  cards: z.array(z.string()).default([]),
+  captions: z.array(Caption).default([]),
   headline: z.string().optional(),
   subhead: z.string().optional(),
   cta: z.string().optional(),

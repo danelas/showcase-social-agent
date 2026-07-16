@@ -17,14 +17,15 @@ const sample: AdProps = {
   scenes: [
     {
       clip: null,
-      durationInFrames: 150,
-      headline: "From Scroll to Booked",
-      subhead: "The video-first way to book local pros.",
-      cta: "Book on PeekScout",
-      bubbles: [
-        { side: "in", text: "Loved your facial video — Saturday open?" },
-        { side: "out", text: "Yes! Booked you in for 10am ✨" },
+      durationInFrames: 240,
+      cards: [],
+      captions: [
+        { text: "Stop guessing.", accent: false },
+        { text: "See it first.", accent: true },
+        { text: "Then book.", accent: false },
       ],
+      cta: "Get PeekScout",
+      bubbles: [],
     },
   ],
 };

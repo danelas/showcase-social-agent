@@ -1,4 +1,5 @@
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -35,8 +36,13 @@ async function main() {
 
   const dims = DIMS[brief.aspect];
   const clipsDir = join(ROOT, "public", "clips");
+  const cardsDir = join(ROOT, "public", "cards");
   const outDir = join(ROOT, "out");
+  const assetsRoot = isAbsolute(brand.assetsDir)
+    ? brand.assetsDir
+    : join(ROOT, brand.assetsDir);
   mkdirSync(clipsDir, { recursive: true });
+  mkdirSync(cardsDir, { recursive: true });
   mkdirSync(outDir, { recursive: true });
 
   const base = basename(briefPath).replace(/\.json$/i, "");
@@ -65,12 +71,7 @@ async function main() {
               prompt: s.prompt,
               aspect: brief.aspect,
               seconds: s.seconds,
-              imagePath: resolveAsset(
-                isAbsolute(brand.assetsDir)
-                  ? brand.assetsDir
-                  : join(ROOT, brand.assetsDir),
-                s.source.image
-              ),
+              imagePath: resolveAsset(assetsRoot, s.source.image),
             }
           : {
               kind: "text2video",
@@ -88,9 +89,20 @@ async function main() {
       console.log(`\n[scene ${i + 1}] ${s.source.type} — skipped (mock)`);
     }
 
+    // Copy each card screenshot into public/cards so Remotion can staticFile it.
+    const cards: string[] = [];
+    for (const card of s.cards) {
+      const src = resolveAsset(assetsRoot, card);
+      const name = basename(src);
+      copyFileSync(src, join(cardsDir, name));
+      cards.push(`cards/${name}`);
+    }
+
     scenes.push({
       clip,
       durationInFrames,
+      cards,
+      captions: s.captions,
       headline: s.headline,
       subhead: s.subhead,
       cta: s.cta,
