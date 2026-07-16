@@ -16,6 +16,7 @@ export type Scene = {
   clip: string | null;
   durationInFrames: number;
   cards: string[];
+  cardReveal?: boolean;
   captions: Caption[];
   headline?: string;
   subhead?: string;
@@ -56,8 +57,12 @@ const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
   scene,
   brand,
 }) => {
-  const { width } = useVideoConfig();
+  const { width, durationInFrames } = useVideoConfig();
   const u = width / 1080;
+  const reveal = !!scene.cardReveal && scene.cards.length > 0;
+  const revealFrames = Math.min(84, Math.round(durationInFrames * 0.4));
+  // In reveal mode, captions must clear out before the phone slides up.
+  const reserveEnd = reveal ? revealFrames + 6 : 42;
 
   return (
     <AbsoluteFill>
@@ -86,11 +91,24 @@ const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
       />
 
       {scene.cards.map((c, i) => (
-        <PhoneCard key={i} src={c} index={i} count={scene.cards.length} u={u} />
+        <PhoneCard
+          key={i}
+          src={c}
+          index={i}
+          count={scene.cards.length}
+          u={u}
+          reveal={reveal}
+          revealFrames={revealFrames}
+        />
       ))}
 
       {scene.captions.length > 0 && (
-        <Captions captions={scene.captions} accent={brand.accent} u={u} />
+        <Captions
+          captions={scene.captions}
+          accent={brand.accent}
+          u={u}
+          reserveEnd={reserveEnd}
+        />
       )}
 
       {/* legacy static overlays still supported */}
@@ -134,26 +152,32 @@ const CutFlash: React.FC = () => {
   return <AbsoluteFill style={{ background: "#fff", opacity }} />;
 };
 
-/** A screenshot floating in a phone frame — slides in, tilts, bobs. */
+/** A screenshot in a phone frame. Default: floats the whole scene. Reveal
+ *  mode: slides up from the bottom only for the last ~2.5s (app reveal). */
 const PhoneCard: React.FC<{
   src: string;
   index: number;
   count: number;
   u: number;
-}> = ({ src, index, count, u }) => {
+  reveal?: boolean;
+  revealFrames?: number;
+}> = ({ src, index, count, u, reveal, revealFrames = 84 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
-  const delay = 6 + index * 10;
-  const s = spring({ frame: frame - delay, fps, config: { damping: 15, mass: 0.7 } });
+  const { fps, width, durationInFrames } = useVideoConfig();
+  const delay = reveal ? durationInFrames - revealFrames : 6 + index * 10;
+  const s = spring({
+    frame: frame - delay,
+    fps,
+    config: reveal ? { damping: 18, mass: 0.9 } : { damping: 15, mass: 0.7 },
+  });
 
-  const cardW = width * (count > 1 ? 0.46 : 0.58);
-  // Fan multiple cards out horizontally.
-  const spread = count > 1 ? (index - (count - 1) / 2) * cardW * 0.62 : 0;
-  const baseTilt = count > 1 ? (index - (count - 1) / 2) * 8 : -4;
+  const cardW = width * (reveal ? 0.52 : count > 1 ? 0.46 : 0.58);
+  const spread = reveal ? 0 : count > 1 ? (index - (count - 1) / 2) * cardW * 0.62 : 0;
+  const baseTilt = reveal ? -3 : count > 1 ? (index - (count - 1) / 2) * 8 : -4;
 
-  const enterY = interpolate(s, [0, 1], [520 * u, 0]);
-  const bob = Math.sin((frame - delay) / 26) * 10 * u;
-  const tilt = baseTilt + Math.sin((frame - delay) / 34) * 1.4;
+  const enterY = interpolate(s, [0, 1], [(reveal ? 1000 : 520) * u, 0]);
+  const bob = reveal ? 0 : Math.sin((frame - delay) / 26) * 10 * u;
+  const tilt = baseTilt + (reveal ? 0 : Math.sin((frame - delay) / 34) * 1.4);
   const opacity = interpolate(frame, [delay, delay + 8], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -164,13 +188,13 @@ const PhoneCard: React.FC<{
       style={{
         position: "absolute",
         left: "50%",
-        top: "50%",
+        top: reveal ? "44%" : "50%",
         width: cardW,
         transform: `translate(-50%,-50%) translateX(${spread}px) translateY(${
-          enterY + bob + 40 * u
+          enterY + bob + (reveal ? 0 : 40 * u)
         }px) rotate(${tilt}deg) scale(${interpolate(s, [0, 1], [0.9, 1])})`,
         opacity,
-        zIndex: 3 + index,
+        zIndex: 6,
       }}
     >
       <div
@@ -196,15 +220,15 @@ const PhoneCard: React.FC<{
 };
 
 /** Kinetic captions: each pops in for its slice of the scene. */
-const Captions: React.FC<{ captions: Caption[]; accent: string; u: number }> = ({
-  captions,
-  accent,
-  u,
-}) => {
+const Captions: React.FC<{
+  captions: Caption[];
+  accent: string;
+  u: number;
+  reserveEnd?: number;
+}> = ({ captions, accent, u, reserveEnd = 42 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
-  const tail = 42; // leave room for the CTA at the end
-  const usable = Math.max(30, durationInFrames - tail);
+  const usable = Math.max(30, durationInFrames - reserveEnd);
   const slot = usable / captions.length;
 
   return (

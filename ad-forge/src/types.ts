@@ -69,8 +69,11 @@ export const Scene = z.object({
   auto: Auto.optional(),
   /** Seconds of footage to request (Veo 3 currently fixes this near 8). */
   seconds: z.number().min(2).max(8).default(8),
-  /** Screenshots (filenames in the brand's assetsDir) shown as floating phone cards. */
+  /** Screenshots (filenames in the brand's assetsDir) shown as phone cards. */
   cards: z.array(z.string()).default([]),
+  /** If true, cards slide in only for the last ~2.5s (an app "reveal") instead
+   *  of floating the whole scene. Great for realistic footage-hero ads. */
+  cardReveal: z.boolean().default(false),
   /** Kinetic captions that pop in sequence over the footage. */
   captions: z.array(Caption).default([]),
   /** Legacy static overlays (still supported). */
@@ -96,6 +99,7 @@ export const CompiledScene = z.object({
   durationInFrames: z.number(),
   /** Card image paths relative to public/. */
   cards: z.array(z.string()).default([]),
+  cardReveal: z.boolean().default(false),
   captions: z.array(Caption).default([]),
   headline: z.string().optional(),
   subhead: z.string().optional(),

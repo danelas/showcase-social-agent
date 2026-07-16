@@ -1,0 +1,18 @@
+{
+  "brand": "peekscout",
+  "aspect": "9:16",
+  "fps": 30,
+  "scenes": [
+    {
+      "source": { "type": "text2video" },
+      "auto": {
+        "category": "real estate home tours",
+        "vibe": "realistic premium commercial, bright, aspirational, cinematic",
+        "offer": "PeekScout lets you watch real video home tours from local agents before you visit"
+      },
+      "seconds": 8,
+      "cards": ["realestate.png"],
+      "cardReveal": true
+    }
+  ]
+}

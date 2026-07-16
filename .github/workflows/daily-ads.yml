@@ -72,9 +72,12 @@ jobs:
         run: |
           forced="${{ github.event.inputs.brief }}"
           if [ -n "$forced" ]; then
-            brief="briefs/$forced"
+            # Accept a bare name (search daily/ then briefs/) or an explicit path.
+            if [ -f "$forced" ]; then brief="$forced";
+            elif [ -f "briefs/daily/$forced" ]; then brief="briefs/daily/$forced";
+            else brief="briefs/$forced"; fi
           else
-            mapfile -t briefs < <(ls briefs/*.json | sort)
+            mapfile -t briefs < <(ls briefs/daily/*.json | sort)
             n=${#briefs[@]}
             idx=$(( $(date -u +%s) / 86400 % n ))
             brief="${briefs[$idx]}"

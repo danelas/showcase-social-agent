@@ -134,6 +134,7 @@ async function main() {
       clip,
       durationInFrames,
       cards,
+      cardReveal: s.cardReveal,
       captions,
       headline: s.headline,
       subhead: s.subhead,
