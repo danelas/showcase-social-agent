@@ -13,8 +13,10 @@
         "offer": "PeekScout lets you watch real barbers videos from local pros, then book instantly"
       },
       "seconds": 8,
-      "cards": [],
-      "cardReveal": false
+      "cards": [
+        "barbers.png"
+      ],
+      "cardReveal": true
     }
   ]
 }

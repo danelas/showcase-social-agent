@@ -13,8 +13,10 @@
         "offer": "PeekScout lets you watch real interior design & staging videos from local pros, then book instantly"
       },
       "seconds": 8,
-      "cards": [],
-      "cardReveal": false
+      "cards": [
+        "interior-design.png"
+      ],
+      "cardReveal": true
     }
   ]
 }

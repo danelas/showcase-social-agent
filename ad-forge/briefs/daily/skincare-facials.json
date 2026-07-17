@@ -13,8 +13,10 @@
         "offer": "PeekScout lets you watch real skincare & facials videos from local pros, then book instantly"
       },
       "seconds": 8,
-      "cards": [],
-      "cardReveal": false
+      "cards": [
+        "skincare-facials.png"
+      ],
+      "cardReveal": true
     }
   ]
 }
