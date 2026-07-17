@@ -32,10 +32,12 @@ function nameFontSize(name: string): number {
 // Size the opening hook so it fits the frame width on one line. drawtext can't
 // wrap, so a fixed size overflows/clips longer hooks (e.g. a 6-word line at 90px
 // runs off both edges). Scale the font to the safe width instead.
-//   safeW ≈ W - 80px (40px margins each side); bold-uppercase advance ≈ 0.62em.
+//   safeW = the pixel budget for the text box (already excludes side margins AND
+//   the drawtext box padding — see call sites). Advance ≈ 0.66em, tuned for the
+//   widest common runner font (DejaVu Sans Bold on CI, wider than Arial).
 function fitFontSize(text: string, safeW: number, max: number, min: number): number {
   const chars = Math.max(text.trim().length, 1);
-  const fs = Math.floor(safeW / (chars * 0.62));
+  const fs = Math.floor(safeW / (chars * 0.66));
   return Math.max(min, Math.min(max, fs));
 }
 
@@ -61,8 +63,10 @@ export async function renderMakeover(
   const eh = escFilterPath(hookFile);
   const nameSize = nameFontSize(input.name);
   // Auto-size the hook (overlay + cover) so long hooks don't clip off-frame.
-  const hookSize = fitFontSize(input.hook, W - 80, 90, 40);
-  const coverHookSize = fitFontSize(input.hook, W - 80, 104, 44);
+  // Budget = W − side margins (~80) − 2×drawtext box padding (boxborderw×2), so
+  // the boxed text keeps real margins on the widest CI font.
+  const hookSize = fitFontSize(input.hook, W - 80 - 2 * 26, 88, 36);
+  const coverHookSize = fitFontSize(input.hook, W - 80 - 2 * 30, 104, 40);
 
   // 1) blurred-fill 9:16 base (no content lost)
   let graph =
