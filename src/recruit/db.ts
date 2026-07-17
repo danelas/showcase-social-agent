@@ -13,12 +13,69 @@ import { PrismaClient, PricingUnit } from "@prisma/client";
 import { slugify } from "./slug";
 import { generateProfileCopy } from "./ai";
 import { scrapePhotos } from "./scrape-photos";
+import { scrapeVideoUrl } from "./scrape-video";
 import { renderBrandedReel } from "./render-video";
 import { uploadMedia } from "./upload";
-import { rm } from "fs/promises";
+import { downloadVideo } from "../makeover/download";
+import { renderMakeover } from "../makeover/render";
+import { writeHook } from "../makeover/hook";
+import { probeDuration } from "../makeover/proc";
+import { rm, mkdtemp } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { CITIES } from "./cities";
 
 export const prisma = new PrismaClient();
+
+// Prefer a recruited pro's REAL video (branded via the makeover render) over the
+// synthetic slideshow reel when their site has one. On by default; set
+// RECRUIT_REAL_VIDEO=0 to force the synthetic reel. Needs yt-dlp on the runner.
+const REAL_VIDEO = !/^(0|false|off|no)$/i.test(process.env.RECRUIT_REAL_VIDEO || "");
+
+/**
+ * If the prospect's site links a real video (hosted file or a YouTube/TikTok/
+ * Reel post), download it, brand + reformat it to vertical with the makeover
+ * render, upload, and return the hosted URLs. Fail-open: any problem → null and
+ * the caller falls back to the synthetic reel. Only used for the hidden draft,
+ * so nothing is published before the owner claims.
+ */
+async function buildRealVideoFromSite(
+  p: { name: string; categoryName: string; city: string; website: string | null },
+): Promise<{ videoUrl: string; poster: string | null } | null> {
+  if (!p.website) return null;
+  const srcUrl = await scrapeVideoUrl(p.website).catch(() => null);
+  if (!srcUrl) return null;
+
+  const dir = await mkdtemp(join(tmpdir(), "recruitvid-"));
+  try {
+    const src = await downloadVideo(srcUrl, dir);
+    if (!src) return null;
+    // Skip hero background loops / stingers and anything absurdly long.
+    const dur = await probeDuration(src);
+    if (dur !== null && (dur < 3 || dur > 240)) return null;
+
+    const hook = await writeHook({
+      name: p.name,
+      service: p.categoryName,
+      transcript: "",
+    });
+    const { videoPath, coverPath } = await renderMakeover(dir, {
+      videoPath: src,
+      assPath: null, // no transcript at recruit time → no burned captions
+      hook,
+      name: p.name,
+      service: p.categoryName,
+    });
+    const videoUrl = await uploadMedia(videoPath, "video", "mp4", "video/mp4");
+    if (!videoUrl) return null;
+    const poster = await uploadMedia(coverPath, "image", "jpg", "image/jpeg");
+    return { videoUrl, poster };
+  } catch {
+    return null;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 export type Prospect = {
   placeKey: string;
@@ -200,30 +257,44 @@ export async function createDraftProvider(p: Sendable): Promise<
     city: p.city,
   });
 
-  // Build a branded reel from their site: a clean title card (always) plus
-  // their framable photos as slides when we find good ones. Rendered + hosted
-  // so the profile goes live as a real video the instant they claim — zero
-  // effort. Fail-open: any problem → no video, we still try a photo gallery.
   const candidates = p.website ? await scrapePhotos(p.website, 10).catch(() => []) : [];
   let videoUrl: string | null = null;
   let videoPoster: string | null = null;
   let gallery: string[] = [];
+  let seededFrom = "google places (recruit)";
 
-  const reel = await renderBrandedReel(
-    { name: p.name, category: p.categoryName, city: p.city, slug },
-    candidates,
-  ).catch(() => null);
-  if (reel) {
-    gallery = reel.galleryUrls;
-    try {
-      const v = await uploadMedia(reel.videoPath, "video", "mp4", "video/mp4");
-      const poster = await uploadMedia(reel.posterPath, "image", "jpg", "image/jpeg");
-      if (v) {
-        videoUrl = v;
-        videoPoster = poster;
+  // 1. Prefer THEIR real video when the site has one — branded + reformatted to
+  // vertical by the makeover render. Strongest "claim it" hook: real content.
+  if (REAL_VIDEO) {
+    const real = await buildRealVideoFromSite(p).catch(() => null);
+    if (real) {
+      videoUrl = real.videoUrl;
+      videoPoster = real.poster;
+      seededFrom = "site video (recruit)";
+    }
+  }
+
+  // 2. Otherwise, a synthetic branded reel from their site: a clean title card
+  // (always) plus their framable photos as slides when we find good ones.
+  // Rendered + hosted so the profile goes live as a real video the instant they
+  // claim — zero effort. Fail-open: any problem → no video, we still try photos.
+  if (!videoUrl) {
+    const reel = await renderBrandedReel(
+      { name: p.name, category: p.categoryName, city: p.city, slug },
+      candidates,
+    ).catch(() => null);
+    if (reel) {
+      gallery = reel.galleryUrls;
+      try {
+        const v = await uploadMedia(reel.videoPath, "video", "mp4", "video/mp4");
+        const poster = await uploadMedia(reel.posterPath, "image", "jpg", "image/jpeg");
+        if (v) {
+          videoUrl = v;
+          videoPoster = poster;
+        }
+      } finally {
+        await rm(reel.dir, { recursive: true, force: true }).catch(() => {});
       }
-    } finally {
-      await rm(reel.dir, { recursive: true, force: true }).catch(() => {});
     }
   }
   // If the video didn't upload but we found framable photos, fall back to a
@@ -256,7 +327,7 @@ export async function createDraftProvider(p: Sendable): Promise<
       isActive: false,
       claimed: false,
       claimToken,
-      seededFrom: "google places (recruit)",
+      seededFrom,
       rankScore: 1,
     },
     select: { id: true },
