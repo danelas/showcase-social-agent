@@ -72,7 +72,17 @@ Rules for "postCaption":
   const res: any = await ai.models.generateContent({
     model: TEXT_MODEL(),
     contents: instruction,
-    config: { responseMimeType: "application/json", temperature: 1.0 },
+    config: {
+      responseMimeType: "application/json",
+      temperature: 1.0,
+      // Give the JSON room to finish. Without a budget, the model's default
+      // output cap plus 2.5-Flash "thinking" tokens truncate longer creatives
+      // (e.g. skincare/photography) mid-string → JSON.parse fails.
+      maxOutputTokens: 2048,
+      // Thinking tokens count against the output budget and aren't needed for
+      // this structured task — turn them off so the whole JSON always fits.
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   });
 
   const raw: string = (res.text ?? "").trim();
@@ -81,7 +91,9 @@ Rules for "postCaption":
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    throw new Error(`Auto-prompt returned non-JSON:\n${raw.slice(0, 400)}`);
+    const finish = res?.candidates?.[0]?.finishReason;
+    const why = finish && finish !== "STOP" ? ` (finishReason=${finish})` : "";
+    throw new Error(`Auto-prompt returned non-JSON${why}:\n${raw.slice(0, 400)}`);
   }
 
   const captions = Array.isArray(parsed.captions)
