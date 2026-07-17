@@ -29,6 +29,16 @@ function nameFontSize(name: string): number {
   return 34;
 }
 
+// Size the opening hook so it fits the frame width on one line. drawtext can't
+// wrap, so a fixed size overflows/clips longer hooks (e.g. a 6-word line at 90px
+// runs off both edges). Scale the font to the safe width instead.
+//   safeW ≈ W - 80px (40px margins each side); bold-uppercase advance ≈ 0.62em.
+function fitFontSize(text: string, safeW: number, max: number, min: number): number {
+  const chars = Math.max(text.trim().length, 1);
+  const fs = Math.floor(safeW / (chars * 0.62));
+  return Math.max(min, Math.min(max, fs));
+}
+
 export type RenderResult = { videoPath: string; coverPath: string };
 
 export async function renderMakeover(
@@ -50,6 +60,9 @@ export async function renderMakeover(
   const es = escFilterPath(svcFile);
   const eh = escFilterPath(hookFile);
   const nameSize = nameFontSize(input.name);
+  // Auto-size the hook (overlay + cover) so long hooks don't clip off-frame.
+  const hookSize = fitFontSize(input.hook, W - 80, 90, 40);
+  const coverHookSize = fitFontSize(input.hook, W - 80, 104, 44);
 
   // 1) blurred-fill 9:16 base (no content lost)
   let graph =
@@ -74,7 +87,7 @@ export async function renderMakeover(
     `x=56:y=${H - 96}:shadowcolor=black@0.7:shadowx=2:shadowy=2,` +
     `drawtext=fontfile='${ef}':text='PeekScout':fontcolor=white@0.6:fontsize=34:` +
     `x=w-tw-56:y=${H - 88},` +
-    `drawtext=fontfile='${ef}':textfile='${eh}':fontcolor=white:fontsize=90:` +
+    `drawtext=fontfile='${ef}':textfile='${eh}':fontcolor=white:fontsize=${hookSize}:` +
     `box=1:boxcolor=black@0.5:boxborderw=26:x=(w-tw)/2:y=${Math.round(H * 0.15)}:` +
     `enable='lt(t,1.7)'`;
 
@@ -111,7 +124,7 @@ export async function renderMakeover(
       "-i", videoPath,
       "-vframes", "1",
       "-vf",
-      `drawtext=fontfile='${ef}':textfile='${eh}':fontcolor=white:fontsize=100:` +
+      `drawtext=fontfile='${ef}':textfile='${eh}':fontcolor=white:fontsize=${coverHookSize}:` +
         `box=1:boxcolor=black@0.5:boxborderw=30:x=(w-tw)/2:y=(h-th)/2`,
       "-q:v", "3",
       coverPath,
