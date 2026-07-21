@@ -95,9 +95,36 @@ async function main() {
   let totalNew = 0;
   let totalWithEmail = 0;
 
+  // Wall-clock budget. A full sweep is dominated by scraping each prospect's
+  // website for an email, which is unbounded — some sites take 30s to time
+  // out. Without a budget the CI job hits its own timeout and gets killed
+  // mid-step, which used to skip the send + follow-up steps entirely. Stopping
+  // early is harmless: the city rotation covers whatever we missed next cycle.
+  const budgetMin = Number(arg("max-minutes") ?? "45");
+  // Split the budget EVENLY across today's cities rather than draining it on
+  // the first one — a global deadline would starve cities 2..n, and since the
+  // rotation window still advances they'd never be revisited.
+  const perCityMs = (budgetMin * 60_000) / Math.max(1, cities.length);
+  let stopped = false;
+  console.log(
+    `[recruit] budget ${budgetMin}m total (~${Math.round(budgetMin / Math.max(1, cities.length))}m per city)`,
+  );
+
+  // A truncated sweep would otherwise always cover the same first categories
+  // (med spa, skincare, …) and never reach the tail. Rotating the starting
+  // offset by day means partial sweeps still work through every vertical.
+  const dayIdx = Math.floor(Date.now() / 86_400_000);
+  const rotated = targets.length
+    ? targets.slice(dayIdx % targets.length).concat(targets.slice(0, dayIdx % targets.length))
+    : targets;
+
   for (const city of cities) {
-    for (const t of targets) {
+    const cityDeadline = Date.now() + perCityMs;
+    const outOfTime = () => Date.now() > cityDeadline;
+    for (const t of rotated) {
+      if (outOfTime()) { stopped = true; break; }
       for (const tmpl of queriesFor(t, mode)) {
+        if (outOfTime()) { stopped = true; break; }
         const query = `${tmpl} in ${city.name}, ${city.stateCode}`;
         process.stdout.write(`  • ${query} … `);
         let places: PlaceLead[];
@@ -151,10 +178,13 @@ async function main() {
     }
   }
 
-  console.log(`\n[recruit] discover done`);
+  console.log(`\n[recruit] discover ${stopped ? `stopped at the ${budgetMin}m budget` : "done"}`);
   console.log(`         seen:          ${totalSeen}`);
   console.log(`         new prospects: ${totalNew}`);
   console.log(`         with email:    ${totalWithEmail}`);
+  if (stopped) {
+    console.log(`         note: the rotation picks up where this left off next run`);
+  }
 }
 
 main()

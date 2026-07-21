@@ -33,7 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     # Discover scrapes each new prospect's website for an email + renders a
     # branded reel per send — a full 16-category city sweep is lengthy.
-    timeout-minutes: 60
+    # Headroom over the sum of the step budgets (20 + 30 + 70) so the job
+    # never kills a step that's already policing itself.
+    timeout-minutes: 130
     env:
       GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
@@ -94,10 +96,35 @@ jobs:
       - name: Ensure outreach_prospects table exists
         run: npm run db:init || echo "::notice::db:init skipped (no CREATE perm) — the app's prisma db push maintains the table"
 
-      - name: Discover new prospects (today's rotating city mix)
-        run: npm run recruit:discover
+      # ORDER MATTERS: emails go out BEFORE discovery.
+      #
+      # Discovery takes 35-55 min per city (it scrapes every new prospect's
+      # website for an address), so with it running first a slow sweep ate the
+      # whole 60-min job and the send steps were cancelled — half the runs sent
+      # nothing at all. Sending draws on the existing prospect pool, not on
+      # today's finds, so it has no reason to wait. Discovery now runs last
+      # with its own budget: if it's cut short, the only cost is fewer new
+      # prospects, and the rotation covers that ground next cycle.
+
+      # Second touch first — cheapest step (~1 min) and the warmest audience.
+      # Also reconciles claimed prospects to CONVERTED.
+      - name: Send follow-ups
+        timeout-minutes: 20
+        env:
+          RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
+          MAX_FOLLOWUPS: ${{ github.event.inputs.max_followups || '15' }}
+        run: |
+          if [ "$RUN_MODE" = "live" ]; then
+            npm run recruit:followup -- --live --max "$MAX_FOLLOWUPS" --min-age-days 3
+          else
+            npm run recruit:followup -- --max "$MAX_FOLLOWUPS" --min-age-days 3
+          fi
 
       - name: Send outreach
+        # Runs even if follow-ups failed — one bad email must not cost the
+        # day's first-touch sends.
+        if: always()
+        timeout-minutes: 30
         env:
           RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
           # 20/day = aggressive-but-safe ceiling while getpeekscout.com is
@@ -111,16 +138,9 @@ jobs:
             npm run recruit:send -- --max "$MAX_SENDS"
           fi
 
-      # Second touch: one nudge to prospects emailed >=3 days ago who still
-      # haven't claimed. Also reconciles claimed prospects to CONVERTED. A
-      # separate cap keeps total daily volume in check.
-      - name: Send follow-ups
-        env:
-          RUN_MODE: ${{ github.event.inputs.mode || 'live' }}
-          MAX_FOLLOWUPS: ${{ github.event.inputs.max_followups || '15' }}
-        run: |
-          if [ "$RUN_MODE" = "live" ]; then
-            npm run recruit:followup -- --live --max "$MAX_FOLLOWUPS" --min-age-days 3
-          else
-            npm run recruit:followup -- --max "$MAX_FOLLOWUPS" --min-age-days 3
-          fi
+      # Refills the pool for tomorrow. Self-limiting via --max-minutes, so it
+      # ends cleanly instead of being killed by the job timeout.
+      - name: Discover new prospects (today's rotating city mix)
+        if: always()
+        timeout-minutes: 70
+        run: npm run recruit:discover -- --max-minutes 60
