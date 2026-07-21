@@ -18,7 +18,7 @@
 // are available without a separate dotenv import.
 import { searchPlaces, type PlaceLead } from "./places";
 import { scrapeEmails } from "./scrape-email";
-import { CITIES, todaysCity, type City } from "./cities";
+import { CITIES, todaysCities, type City } from "./cities";
 import { TARGETS, type Target } from "./targets";
 import { getKnownPlaceKeys, insertProspect, prisma, type Prospect } from "./db";
 
@@ -69,9 +69,9 @@ async function main() {
     }
     cities = [match];
   } else if (cityCount) {
-    cities = CITIES.slice(0, cityCount);
+    cities = todaysCities(cityCount);
   } else {
-    cities = [todaysCity()];
+    cities = todaysCities();
   }
 
   let targets = TARGETS;

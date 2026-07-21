@@ -1,7 +1,7 @@
 name: Recruit Providers
 
 # Daily provider recruitment for PeekScout. Discovers businesses on Google Places
-# (one city per day, auto-rotated), then for each new prospect creates an
+# (a rotating MIX of cities per day — see recruit/cities.ts), then for each new prospect creates an
 # unclaimed draft Provider in the shared PeekScout Postgres and cold-emails a
 # claim link ("we already built your profile"). State lives in outreach_prospects.
 on:
@@ -94,7 +94,7 @@ jobs:
       - name: Ensure outreach_prospects table exists
         run: npm run db:init || echo "::notice::db:init skipped (no CREATE perm) — the app's prisma db push maintains the table"
 
-      - name: Discover new prospects (today's rotating city)
+      - name: Discover new prospects (today's rotating city mix)
         run: npm run recruit:discover
 
       - name: Send outreach

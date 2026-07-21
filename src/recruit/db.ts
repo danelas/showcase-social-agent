@@ -195,20 +195,51 @@ export async function getSendable(opts: {
   return roundRobinByCategory(pool, opts.limit).map(toSendable);
 }
 
-// Pick up to `limit` prospects, rotating through categories one at a time so no
-// single category dominates. Preserves each category's incoming (pool) order.
+// Pick up to `limit` prospects, rotating through CITIES first and categories
+// within each city, so neither one market nor one vertical dominates a send.
+//
+// City rotation matters as much as category: the pool is ordered oldest-scraped
+// first, so without it the market discovered earliest supplies every send until
+// it's exhausted — which is exactly how signups ended up concentrated in one
+// metro. Order inside each (city, category) bucket is preserved.
 function roundRobinByCategory(pool: ProspectRow[], limit: number): ProspectRow[] {
-  const groups = new Map<string, ProspectRow[]>();
+  const byCity = new Map<string, Map<string, ProspectRow[]>>();
   for (const r of pool) {
-    const k = r.categoryName || "other";
-    (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
+    const cityKey = (r.city || "other").toLowerCase();
+    const catKey = r.categoryName || "other";
+    let cats = byCity.get(cityKey);
+    if (!cats) {
+      cats = new Map();
+      byCity.set(cityKey, cats);
+    }
+    const bucket = cats.get(catKey);
+    if (bucket) bucket.push(r);
+    else cats.set(catKey, [r]);
   }
-  const queues = Array.from(groups.values());
+
+  // Per city, flatten its categories round-robin — then interleave the cities.
+  const cityQueues = Array.from(byCity.values()).map((cats) => {
+    const queues = Array.from(cats.values());
+    const flat: ProspectRow[] = [];
+    let progress = true;
+    while (progress) {
+      progress = false;
+      for (const q of queues) {
+        const next = q.shift();
+        if (next) {
+          flat.push(next);
+          progress = true;
+        }
+      }
+    }
+    return flat;
+  });
+
   const out: ProspectRow[] = [];
   let progress = true;
   while (out.length < limit && progress) {
     progress = false;
-    for (const q of queues) {
+    for (const q of cityQueues) {
       if (out.length >= limit) break;
       const next = q.shift();
       if (next) {

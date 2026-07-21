@@ -16,9 +16,28 @@ export const CITIES: City[] = [
   { slug: "san-jose", name: "San Jose", stateCode: "CA" },
 ];
 
+/** How many cities each daily run sweeps. */
+export const DAILY_CITIES = 3;
+
+function dayOfYear(): number {
+  const start = new Date(new Date().getFullYear(), 0, 0);
+  return Math.floor((Date.now() - start.getTime()) / 86_400_000);
+}
+
 /** Day-of-year rotation — same city all day, cycles through the list monthly. */
 export function todaysCity(): City {
-  const start = new Date(new Date().getFullYear(), 0, 0);
-  const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86_400_000);
-  return CITIES[dayOfYear % CITIES.length];
+  return CITIES[dayOfYear() % CITIES.length];
+}
+
+/**
+ * A MIX of cities for today's run. One city per day meant whichever market got
+ * discovered first kept supplying the oldest (and therefore first-sent)
+ * prospects, so signups clustered in a single metro. Sweeping several markets a
+ * day — and walking the window forward by `count` — keeps every market fed and
+ * still cycles the whole list every few days.
+ */
+export function todaysCities(count = DAILY_CITIES): City[] {
+  const n = Math.max(1, Math.min(count, CITIES.length));
+  const start = (dayOfYear() * n) % CITIES.length;
+  return Array.from({ length: n }, (_, i) => CITIES[(start + i) % CITIES.length]);
 }
