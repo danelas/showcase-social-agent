@@ -7,9 +7,11 @@ name: Daily Ads (ad-forge)
 # SAFE BY DEFAULT: free MOCK mode (no Veo spend) until repo var ADFORGE_REAL=1.
 # Veo key = repo secret GEMINI_API_KEY.
 on:
-  schedule:
-    # 13:10 UTC daily (~9am ET).
-    - cron: "10 13 * * *"
+  # PAUSED 2026-07-21: daily auto-generation is off while the backlog of
+  # already-rendered ads gets used up. Re-enable by uncommenting the cron.
+  # schedule:
+  #   # 13:10 UTC daily (~9am ET).
+  #   - cron: "10 13 * * *"
   workflow_dispatch:
     inputs:
       brief:
