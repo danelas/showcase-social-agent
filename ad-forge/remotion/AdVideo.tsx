@@ -44,7 +44,7 @@ export const AdVideo: React.FC<AdProps> = ({ brand, scenes }) => {
       <Series>
         {scenes.map((scene, i) => (
           <Series.Sequence key={i} durationInFrames={scene.durationInFrames}>
-            <SceneView scene={scene} brand={brand} />
+            <SceneView scene={scene} brand={brand} first={i === 0} />
           </Series.Sequence>
         ))}
       </Series>
@@ -53,9 +53,10 @@ export const AdVideo: React.FC<AdProps> = ({ brand, scenes }) => {
   );
 };
 
-const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
+const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"]; first?: boolean }> = ({
   scene,
   brand,
+  first,
 }) => {
   const { width, durationInFrames } = useVideoConfig();
   const u = width / 1080;
@@ -128,7 +129,10 @@ const SceneView: React.FC<{ scene: Scene; brand: AdProps["brand"] }> = ({
 
       {scene.cta && <CTA u={u} label={scene.cta} accent={brand.accent} />}
 
-      <CutFlash />
+      {/* Flash only on scene *cuts* (2..N). The first scene's frame 0 is also
+          the video's opening frame / thumbnail, so flashing there would wash
+          the whole opening out to grey-white. */}
+      {!first && <CutFlash />}
     </AbsoluteFill>
   );
 };
